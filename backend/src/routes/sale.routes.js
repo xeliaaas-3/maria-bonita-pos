@@ -1,0 +1,12 @@
+const router = require('express').Router();
+const ctrl = require('../controllers/sale.controller');
+const { isAdminOrCajero } = require('../middleware/auth.middleware');
+
+router.get('/', ctrl.getSales);
+router.get('/:id', ctrl.getSale);
+router.get('/:id/ticket', ctrl.getSaleTicket);
+router.post('/', ctrl.createSale);
+router.patch('/:id/cancel', isAdminOrCajero, ctrl.cancelSale);
+router.patch('/:id', isAdminOrCajero, ctrl.updateSale);
+
+module.exports = router;

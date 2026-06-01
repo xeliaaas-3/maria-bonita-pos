@@ -1,0 +1,688 @@
+// ============================================
+// BOUTIQUE POS - Schema Prisma (v3 — limpio)
+// ============================================
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// ENUMS
+// ============================================
+
+enum Role {
+  ADMIN
+  CAJERO
+  EMPLEADO
+}
+
+enum SaleStatus {
+  PENDIENTE
+  COMPLETADA
+  CANCELADA
+  DEVOLUCION
+}
+
+enum PaymentMethod {
+  EFECTIVO
+  TRANSFERENCIA
+  TARJETA
+  QR
+  MIXTO
+}
+
+enum MovementType {
+  ENTRADA
+  SALIDA
+  AJUSTE
+  DEVOLUCION
+  TRANSFERENCIA
+}
+
+enum CashMovementType {
+  APERTURA
+  CIERRE
+  INGRESO
+  EGRESO
+  VENTA
+  DEVOLUCION
+}
+
+enum ProductStatus {
+  ACTIVO
+  INACTIVO
+  AGOTADO
+}
+
+enum CustomerTier {
+  REGULAR
+  VIP
+  PREMIUM
+}
+
+enum LayawayStatus {
+  ACTIVO
+  COMPLETADO
+  CANCELADO
+}
+
+enum OrderStatus {
+  PENDIENTE
+  EN_CAMINO
+  RECIBIDO
+  ENTREGADO
+  CANCELADO
+}
+
+// ============================================
+// SUCURSALES
+// ============================================
+
+model Branch {
+  id          String   @id @default(cuid())
+  name        String
+  address     String?
+  phone       String?
+  email       String?
+  isMain      Boolean  @default(false)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users              User[]
+  products           ProductStock[]
+  sales              Sale[]
+  cashSessions       CashSession[]
+  inventoryMovements InventoryMovement[]
+  transfersFrom      Transfer[]  @relation("FromBranch")
+  transfersTo        Transfer[]  @relation("ToBranch")
+  layaways           Layaway[]
+  orders             Order[]
+  purchases          Purchase[]
+
+  @@map("branches")
+}
+
+// ============================================
+// USUARIOS Y AUTENTICACIÓN
+// ============================================
+
+model User {
+  id          String    @id @default(cuid())
+  name        String
+  email       String    @unique
+  password    String
+  role        Role      @default(EMPLEADO)
+  avatar      String?
+  phone       String?
+  isActive    Boolean   @default(true)
+  lastLogin   DateTime?
+  branchId    String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  branch       Branch?       @relation(fields: [branchId], references: [id])
+  sessions     UserSession[]
+  sales        Sale[]
+  activityLogs ActivityLog[]
+  cashSessions CashSession[]
+  layaways           Layaway[]
+  orders             Order[]
+  transfers          Transfer[]
+  inventoryMovements InventoryMovement[]
+  purchases          Purchase[]
+
+  @@map("users")
+}
+
+model UserSession {
+  id           String   @id @default(cuid())
+  userId       String
+  refreshToken String   @unique
+  device       String?
+  ip           String?
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_sessions")
+}
+
+model ActivityLog {
+  id        String   @id @default(cuid())
+  userId    String
+  action    String
+  entity    String?
+  entityId  String?
+  details   Json?
+  ip        String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("activity_logs")
+}
+
+// ============================================
+// CATEGORÍAS Y MARCAS
+// ============================================
+
+model Category {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  image       String?
+  parentId    String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children Category[] @relation("CategoryTree")
+  products Product[]
+
+  @@map("categories")
+}
+
+model Brand {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  logo        String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  products Product[]
+
+  @@map("brands")
+}
+
+// ============================================
+// PRODUCTOS
+// ============================================
+
+model Product {
+  id          String        @id @default(cuid())
+  name        String
+  description String?
+  sku         String        @unique
+  barcode     String?       @unique
+  categoryId  String?
+  brandId     String?
+  costPrice   Decimal       @db.Decimal(12, 2)
+  salePrice   Decimal       @db.Decimal(12, 2)
+  status      ProductStatus @default(ACTIVO)
+  minStock    Int           @default(5)
+  images      String[]
+  tags        String[]
+  isFeatured  Boolean       @default(false)
+  taxRate     Decimal       @default(0) @db.Decimal(5, 2)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  category  Category?         @relation(fields: [categoryId], references: [id])
+  brand     Brand?            @relation(fields: [brandId], references: [id])
+  variants  ProductVariant[]
+  stocks    ProductStock[]
+  saleItems SaleItem[]
+  movements InventoryMovement[]
+
+  @@index([sku])
+  @@index([barcode])
+  @@index([categoryId])
+  @@map("products")
+}
+
+model ProductVariant {
+  id        String   @id @default(cuid())
+  productId String
+  size      String?
+  color     String?
+  sku       String   @unique
+  barcode   String?  @unique
+  price     Decimal? @db.Decimal(12, 2)
+  image     String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  product   Product        @relation(fields: [productId], references: [id], onDelete: Cascade)
+  stocks    ProductStock[]
+  saleItems SaleItem[]
+
+  @@map("product_variants")
+}
+
+model ProductStock {
+  id        String   @id @default(cuid())
+  productId String
+  variantId String?
+  branchId  String
+  quantity  Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  product Product         @relation(fields: [productId], references: [id])
+  variant ProductVariant? @relation(fields: [variantId], references: [id])
+  branch  Branch          @relation(fields: [branchId], references: [id])
+
+  @@unique([productId, variantId, branchId])
+  @@map("product_stocks")
+}
+
+// ============================================
+// INVENTARIO
+// ============================================
+
+model InventoryMovement {
+  id          String       @id @default(cuid())
+  productId   String
+  variantId   String?
+  branchId    String
+  type        MovementType
+  quantity    Int
+  previousQty Int
+  currentQty  Int
+  reason      String?
+  reference   String?
+  userId      String?
+  createdAt   DateTime     @default(now())
+
+  product Product  @relation(fields: [productId], references: [id])
+  branch  Branch   @relation(fields: [branchId], references: [id])
+  user    User?    @relation(fields: [userId], references: [id])
+
+  @@index([productId])
+  @@index([branchId])
+  @@index([createdAt])
+  @@map("inventory_movements")
+}
+
+model Transfer {
+  id           String   @id @default(cuid())
+  fromBranchId String
+  toBranchId   String
+  status       String   @default("PENDIENTE")
+  notes        String?
+  userId       String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  fromBranch Branch         @relation("FromBranch", fields: [fromBranchId], references: [id])
+  toBranch   Branch         @relation("ToBranch", fields: [toBranchId], references: [id])
+  user       User           @relation(fields: [userId], references: [id])
+  items      TransferItem[]
+
+  @@map("transfers")
+}
+
+model TransferItem {
+  id         String  @id @default(cuid())
+  transferId String
+  productId  String
+  variantId  String?
+  quantity   Int
+
+  transfer Transfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
+
+  @@map("transfer_items")
+}
+
+// ============================================
+// CLIENTES
+// ============================================
+
+model Customer {
+  id          String       @id @default(cuid())
+  name        String
+  email       String?      @unique
+  phone       String?
+  whatsapp    String?
+  document    String?      @unique
+  address     String?
+  city        String?
+  birthdate   DateTime?
+  tier        CustomerTier @default(REGULAR)
+  points      Int          @default(0)
+  totalSpent  Decimal      @default(0) @db.Decimal(12, 2)
+  credit      Decimal      @default(0) @db.Decimal(12, 2)
+  debt        Decimal      @default(0) @db.Decimal(12, 2)
+  notes       String?
+  isActive    Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  sales         Sale[]
+  pointsHistory PointsHistory[]
+  layaways      Layaway[]
+  orders        Order[]
+
+  @@index([phone])
+  @@index([document])
+  @@map("customers")
+}
+
+model PointsHistory {
+  id          String   @id @default(cuid())
+  customerId  String
+  points      Int
+  type        String
+  description String?
+  saleId      String?
+  createdAt   DateTime @default(now())
+
+  customer Customer @relation(fields: [customerId], references: [id])
+
+  @@map("points_history")
+}
+
+// ============================================
+// VENTAS Y POS
+// ============================================
+
+model Sale {
+  id            String     @id @default(cuid())
+  number        String     @unique
+  branchId      String
+  userId        String
+  customerId    String?
+  cashSessionId String?
+  status        SaleStatus @default(COMPLETADA)
+  subtotal      Decimal    @db.Decimal(12, 2)
+  discount      Decimal    @default(0) @db.Decimal(12, 2)
+  discountType  String?
+  tax           Decimal    @default(0) @db.Decimal(12, 2)
+  total         Decimal    @db.Decimal(12, 2)
+  amountPaid    Decimal    @db.Decimal(12, 2)
+  change        Decimal    @default(0) @db.Decimal(12, 2)
+  notes         String?
+  cancelReason  String?
+  pointsEarned  Int        @default(0)
+  pointsUsed    Int        @default(0)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  branch      Branch       @relation(fields: [branchId], references: [id])
+  user        User         @relation(fields: [userId], references: [id])
+  customer    Customer?    @relation(fields: [customerId], references: [id])
+  cashSession CashSession? @relation(fields: [cashSessionId], references: [id])
+  items       SaleItem[]
+  payments    SalePayment[]
+
+  @@index([branchId])
+  @@index([customerId])
+  @@index([createdAt])
+  @@index([number])
+  @@map("sales")
+}
+
+model SaleItem {
+  id        String  @id @default(cuid())
+  saleId    String
+  productId String
+  variantId String?
+  name      String
+  sku       String
+  quantity  Int
+  unitPrice Decimal @db.Decimal(12, 2)
+  discount  Decimal @default(0) @db.Decimal(12, 2)
+  tax       Decimal @default(0) @db.Decimal(12, 2)
+  total     Decimal @db.Decimal(12, 2)
+
+  sale    Sale            @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  product Product         @relation(fields: [productId], references: [id])
+  variant ProductVariant? @relation(fields: [variantId], references: [id])
+
+  @@map("sale_items")
+}
+
+model SalePayment {
+  id        String        @id @default(cuid())
+  saleId    String
+  method    PaymentMethod
+  amount    Decimal       @db.Decimal(12, 2)
+  reference String?
+  createdAt DateTime      @default(now())
+
+  sale Sale @relation(fields: [saleId], references: [id], onDelete: Cascade)
+
+  @@map("sale_payments")
+}
+
+// ============================================
+// CAJA
+// ============================================
+
+model CashSession {
+  id             String    @id @default(cuid())
+  branchId       String
+  userId         String
+  openingAmount  Decimal   @db.Decimal(12, 2)
+  closingAmount  Decimal?  @db.Decimal(12, 2)
+  expectedAmount Decimal?  @db.Decimal(12, 2)
+  difference     Decimal?  @db.Decimal(12, 2)
+  notes          String?
+  openedAt       DateTime  @default(now())
+  closedAt       DateTime?
+
+  branch    Branch         @relation(fields: [branchId], references: [id])
+  user      User           @relation(fields: [userId], references: [id])
+  sales     Sale[]
+  movements CashMovement[]
+
+  @@map("cash_sessions")
+}
+
+model CashMovement {
+  id            String           @id @default(cuid())
+  cashSessionId String
+  type          CashMovementType
+  amount        Decimal          @db.Decimal(12, 2)
+  description   String?
+  reference     String?
+  createdAt     DateTime         @default(now())
+
+  cashSession CashSession @relation(fields: [cashSessionId], references: [id])
+
+  @@map("cash_movements")
+}
+
+// ============================================
+// CONFIGURACIÓN
+// ============================================
+
+model Setting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     Json
+  group     String   @default("general")
+  updatedAt DateTime @updatedAt
+
+  @@map("settings")
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String?
+  title     String
+  message   String
+  type      String   @default("info")
+  read      Boolean  @default(false)
+  link      String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("notifications")
+}
+
+// ============================================
+// APARTADOS
+// ============================================
+
+model Layaway {
+  id          String        @id @default(cuid())
+  number      String        @unique
+  customerId  String
+  branchId    String
+  userId      String
+  status      LayawayStatus @default(ACTIVO)
+  totalAmount Decimal       @db.Decimal(12, 2)
+  deposit     Decimal       @db.Decimal(12, 2)
+  balance     Decimal       @db.Decimal(12, 2)
+  dueDate     DateTime?
+  notes       String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  customer Customer        @relation(fields: [customerId], references: [id])
+  branch   Branch          @relation(fields: [branchId], references: [id])
+  user     User            @relation(fields: [userId], references: [id])
+  items    LayawayItem[]
+  payments LayawayPayment[]
+
+  @@index([customerId])
+  @@index([status])
+  @@map("layaways")
+}
+
+model LayawayItem {
+  id        String  @id @default(cuid())
+  layawayId String
+  productName String
+  size      String?
+  color     String?
+  quantity  Int
+  unitPrice Decimal @db.Decimal(12, 2)
+  total     Decimal @db.Decimal(12, 2)
+
+  layaway Layaway @relation(fields: [layawayId], references: [id], onDelete: Cascade)
+
+  @@map("layaway_items")
+}
+
+model LayawayPayment {
+  id        String        @id @default(cuid())
+  layawayId String
+  amount    Decimal       @db.Decimal(12, 2)
+  method    PaymentMethod
+  reference String?
+  notes     String?
+  createdAt DateTime      @default(now())
+
+  layaway Layaway @relation(fields: [layawayId], references: [id], onDelete: Cascade)
+
+  @@map("layaway_payments")
+}
+
+// ============================================
+// ENCARGOS
+// ============================================
+
+model Order {
+  id         String      @id @default(cuid())
+  number     String      @unique
+  customerId String?
+  branchId   String
+  userId     String
+  status     OrderStatus @default(PENDIENTE)
+  notes      String?
+  expectedAt DateTime?
+  arrivedAt  DateTime?
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  customer Customer?   @relation(fields: [customerId], references: [id])
+  branch   Branch      @relation(fields: [branchId], references: [id])
+  user     User        @relation(fields: [userId], references: [id])
+  items    OrderItem[]
+
+  @@index([status])
+  @@map("orders")
+}
+
+model OrderItem {
+  id          String  @id @default(cuid())
+  orderId     String
+  productId   String?
+  productName String
+  size        String?
+  color       String?
+  quantity    Int
+  unitPrice   Decimal @db.Decimal(12, 2)
+  notes       String?
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@map("order_items")
+}
+
+// ============================================
+// PROVEEDORES Y COMPRAS
+// ============================================
+
+model Supplier {
+  id        String   @id @default(cuid())
+  name      String
+  contact   String?
+  phone     String?
+  email     String?
+  address   String?
+  ruc       String?
+  notes     String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  purchases Purchase[]
+
+  @@map("suppliers")
+}
+
+model Purchase {
+  id         String   @id @default(cuid())
+  number     String   @unique
+  supplierId String
+  branchId   String
+  userId     String
+  total      Decimal  @db.Decimal(12, 2)
+  status     String   @default("RECIBIDA")
+  invoiceRef String?
+  notes      String?
+  receivedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  supplier Supplier       @relation(fields: [supplierId], references: [id])
+  branch   Branch         @relation(fields: [branchId], references: [id])
+  user     User           @relation(fields: [userId], references: [id])
+  items    PurchaseItem[]
+
+  @@index([supplierId])
+  @@map("purchases")
+}
+
+model PurchaseItem {
+  id          String  @id @default(cuid())
+  purchaseId  String
+  productId   String?
+  variantId   String?
+  productName String
+  sku         String?
+  quantity    Int
+  unitCost    Decimal @db.Decimal(12, 2)
+  total       Decimal @db.Decimal(12, 2)
+
+  purchase Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+
+  @@map("purchase_items")
+}
