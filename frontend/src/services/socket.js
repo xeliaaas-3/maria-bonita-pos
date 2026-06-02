@@ -13,11 +13,15 @@ class SocketService {
   connect(token) {
     if (this.socket?.connected) return;
 
-    this.socket = io(import.meta.env.VITE_SOCKET_URL || '', {
+    // VITE_SOCKET_URL o derivar del VITE_API_URL quitando /api/v1
+    const apiUrl = import.meta.env.VITE_API_URL || '';
+    const socketUrl = import.meta.env.VITE_SOCKET_URL || apiUrl.replace('/api/v1', '') || window.location.origin;
+
+    this.socket = io(socketUrl, {
       auth: { token },
       reconnectionAttempts: 5,
-      reconnectionDelay: 1000,
-      transports: ['websocket', 'polling']
+      reconnectionDelay: 2000,
+      transports: ['polling', 'websocket']
     });
 
     this.socket.on('connect', () => {
