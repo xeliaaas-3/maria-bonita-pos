@@ -415,8 +415,6 @@ exports.getCatalog = async (req, res) => {
         return null;
       }
     };
-    const _fetchImageBufferOld = (url) => new Promise((resolve) => { resolve(null); }
-    });
 
     const fmt = (n) => Number(n || 0).toLocaleString('es-PY');
 
