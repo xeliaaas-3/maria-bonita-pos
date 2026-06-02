@@ -241,8 +241,8 @@ export default function ProductsPage() {
         </div>
       ) : (
         /* List View */
-        <div className={clsx('rounded-2xl border overflow-hidden', cardBase)}>
-          <table className="w-full text-sm">
+        <div className={clsx('rounded-2xl border', cardBase)}>
+          <div className="overflow-x-auto rounded-2xl"><table className="w-full text-sm min-w-[580px]">
             <thead>
               <tr className={clsx('border-b', isDark ? 'border-dark-800' : 'border-gray-100')}>
                 {['Producto', 'SKU', 'Categoría', 'Precio', 'Stock', 'Estado', ''].map(h => (
@@ -317,7 +317,7 @@ export default function ProductsPage() {
                 </motion.tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         </div>
       )}
 

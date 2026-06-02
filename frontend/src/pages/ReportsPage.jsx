@@ -236,7 +236,7 @@ export default function ReportsPage() {
 
           {/* Table */}
           {reportData?.tableData?.length > 0 && (
-            <div className={clsx('rounded-2xl border overflow-hidden', cardBase)}>
+            <div className={clsx('rounded-2xl border', cardBase)}>
               <div className={clsx('p-5 border-b flex items-center justify-between', isDark ? 'border-dark-800' : 'border-gray-100')}>
                 <h3 className={clsx('font-semibold', isDark ? 'text-white' : 'text-dark-900')}>
                   Detalle del período
@@ -245,8 +245,8 @@ export default function ReportsPage() {
                   {reportData.tableData.length} registros
                 </span>
               </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+              <div className="overflow-x-auto rounded-2xl">
+                <table className="w-full text-sm min-w-[600px]">
                   <thead>
                     <tr className={clsx('border-b', isDark ? 'border-dark-800' : 'border-gray-100')}>
                       {reportData.tableHeaders?.map(h => (

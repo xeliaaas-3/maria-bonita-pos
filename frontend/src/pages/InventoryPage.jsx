@@ -132,13 +132,19 @@ export default function InventoryPage() {
           ) : data?.data?.length === 0 ? (
             <EmptyState icon={Package} title="Sin resultados" isDark={isDark} />
           ) : (
-            <div className={clsx('rounded-2xl border overflow-hidden', cardBase)}>
-              <table className="w-full text-sm">
+            <div className={clsx('rounded-2xl border', cardBase)}>
+              <div className="overflow-x-auto rounded-2xl">
+              <table className="w-full text-sm min-w-[640px]">
                 <thead>
                   <tr className={clsx('border-b', isDark ? 'border-dark-800' : 'border-gray-100')}>
-                    {['Producto', 'SKU', 'Variante', 'Sucursal', 'Stock', 'Mín', 'Costo', ''].map(h => (
-                      <th key={h} className={clsx('text-left px-4 py-3 text-xs font-semibold', isDark ? 'text-dark-400' : 'text-gray-500')}>{h}</th>
-                    ))}
+                    <th className={clsx('text-left px-4 py-3 text-xs font-semibold', isDark ? 'text-dark-400' : 'text-gray-500')}>Producto</th>
+                    <th className={clsx('text-left px-4 py-3 text-xs font-semibold', isDark ? 'text-dark-400' : 'text-gray-500')}>SKU</th>
+                    <th className={clsx('text-left px-4 py-3 text-xs font-semibold', isDark ? 'text-dark-400' : 'text-gray-500')}>Variante</th>
+                    <th className={clsx('text-left px-4 py-3 text-xs font-semibold', isDark ? 'text-dark-400' : 'text-gray-500')}>Sucursal</th>
+                    <th className={clsx('text-left px-4 py-3 text-xs font-semibold', isDark ? 'text-dark-400' : 'text-gray-500')}>Stock</th>
+                    <th className={clsx('text-left px-4 py-3 text-xs font-semibold', isDark ? 'text-dark-400' : 'text-gray-500')}>Min</th>
+                    <th className={clsx('text-left px-4 py-3 text-xs font-semibold', isDark ? 'text-dark-400' : 'text-gray-500')}>Costo</th>
+                    <th className={clsx('text-left px-4 py-3 text-xs font-semibold', isDark ? 'text-dark-400' : 'text-gray-500')}></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -161,16 +167,16 @@ export default function InventoryPage() {
                                 <Package className="w-4 h-4 text-gray-400" />
                               )}
                             </div>
-                            <p className={clsx('font-medium', isDark ? 'text-white' : 'text-dark-900')}>{stock.product.name}</p>
+                            <div>
+                              <p className={clsx('font-medium', isDark ? 'text-white' : 'text-dark-900')}>{stock.product.name}</p>
+                              <p className={clsx('text-xs font-mono', isDark ? 'text-dark-500' : 'text-gray-400')}>{stock.product.sku}</p>
+                              {stock.variant && (
+                                <span className={clsx('text-xs px-1.5 py-0.5 rounded-md mt-0.5 inline-block', isDark ? 'bg-dark-800 text-dark-300' : 'bg-gray-100 text-gray-600')}>
+                                  {[stock.variant.size, stock.variant.color].filter(Boolean).join(' / ')}
+                                </span>
+                              )}
+                            </div>
                           </div>
-                        </td>
-                        <td className="px-4 py-3"><span className={clsx('font-mono text-xs', isDark ? 'text-dark-400' : 'text-gray-500')}>{stock.product.sku}</span></td>
-                        <td className="px-4 py-3">
-                          {stock.variant ? (
-                            <span className={clsx('text-xs px-2 py-0.5 rounded-lg', isDark ? 'bg-dark-800 text-dark-300' : 'bg-gray-100 text-gray-600')}>
-                              {[stock.variant.size, stock.variant.color].filter(Boolean).join(' / ')}
-                            </span>
-                          ) : <span className={clsx('text-xs', isDark ? 'text-dark-500' : 'text-gray-400')}>—</span>}
                         </td>
                         <td className="px-4 py-3"><span className={clsx('text-xs', isDark ? 'text-dark-400' : 'text-gray-500')}>{stock.branch?.name}</span></td>
                         <td className="px-4 py-3">
@@ -185,7 +191,7 @@ export default function InventoryPage() {
                           {hasRole('ADMIN', 'CAJERO') && (
                             <button
                               onClick={() => setAdjustModal({ productId: stock.productId, variantId: stock.variantId, branchId: stock.branchId, productName: stock.product.name, currentQty: stock.quantity })}
-                              className={clsx('text-xs px-2.5 py-1 rounded-lg font-medium border transition-colors', isDark ? 'border-dark-700 text-dark-300 hover:bg-dark-800' : 'border-gray-200 text-gray-600 hover:bg-gray-100')}
+                              className={clsx('text-xs px-3 py-1.5 rounded-xl font-semibold transition-colors whitespace-nowrap', isDark ? 'bg-primary-500/10 text-primary-400 hover:bg-primary-500/20' : 'bg-primary-50 text-primary-600 hover:bg-primary-100')}
                             >
                               Ajustar
                             </button>
@@ -196,17 +202,19 @@ export default function InventoryPage() {
                   })}
                 </tbody>
               </table>
+              </div>
             </div>
           )}
         </>
       )}
 
       {tab === 'kardex' && (
-        <div className={clsx('rounded-2xl border overflow-hidden', cardBase)}>
+        <div className={clsx('rounded-2xl border', cardBase)}>
           <div className={clsx('p-4 border-b', isDark ? 'border-dark-800' : 'border-gray-100')}>
             <h3 className={clsx('font-semibold', isDark ? 'text-white' : 'text-dark-900')}>Historial de Movimientos</h3>
           </div>
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[700px]">
             <thead>
               <tr className={clsx('border-b', isDark ? 'border-dark-800' : 'border-gray-100')}>
                 {['Fecha', 'Producto', 'Tipo', 'Cantidad', 'Anterior', 'Actual', 'Motivo'].map(h => (
@@ -228,6 +236,7 @@ export default function InventoryPage() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 

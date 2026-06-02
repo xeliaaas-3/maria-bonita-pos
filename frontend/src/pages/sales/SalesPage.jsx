@@ -195,8 +195,8 @@ export default function SalesPage() {
       ) : data?.data?.length === 0 ? (
         <EmptyState icon={Receipt} title="No hay ventas" description="No se encontraron ventas en este período" isDark={isDark} />
       ) : (
-        <div className={clsx('rounded-2xl border overflow-hidden', cardBase)}>
-          <table className="w-full text-sm">
+        <div className={clsx('rounded-2xl border', cardBase)}>
+          <div className="overflow-x-auto rounded-2xl"><table className="w-full text-sm min-w-[600px]">
             <thead>
               <tr className={clsx('border-b', isDark ? 'border-dark-800' : 'border-gray-100')}>
                 {['Nro.', 'Fecha', 'Cliente', 'Cajero', 'Items', 'Método', 'Total', 'Estado', ''].map(h => (
@@ -277,7 +277,7 @@ export default function SalesPage() {
                 );
               })}
             </tbody>
-          </table>
+          </table></div>
         </div>
       )}
 
