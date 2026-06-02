@@ -32,8 +32,21 @@ app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' }
 }));
 
+// CORS: soporte para multiples origenes (local + Railway)
+const allowedOrigins = (process.env.CORS_ORIGINS || process.env.SOCKET_CORS_ORIGIN || 'http://localhost:3000')
+  .split(',').map(o => o.trim()).filter(Boolean);
+
 app.use(cors({
-  origin: process.env.SOCKET_CORS_ORIGIN || 'http://localhost:3000',
+  origin: (origin, callback) => {
+    // Permitir requests sin origin (mobile apps, curl, Railway healthcheck)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
+      return callback(null, true);
+    }
+    // En desarrollo permitir todo
+    if (process.env.NODE_ENV !== 'production') return callback(null, true);
+    callback(new Error('Not allowed by CORS'));
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
