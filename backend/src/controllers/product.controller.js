@@ -240,18 +240,36 @@ exports.deleteProduct = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Verificar si tiene ventas
+    // Si tiene ventas, solo desactivar
     const hasSales = await prisma.saleItem.findFirst({ where: { productId: id } });
     if (hasSales) {
-      // Solo desactivar
       await prisma.product.update({ where: { id }, data: { status: 'INACTIVO' } });
       return res.json({ success: true, message: 'Producto desactivado (tiene historial de ventas)' });
     }
 
+    // Eliminar registros relacionados en orden para evitar FK violations
+    await prisma.inventoryMovement.deleteMany({ where: { productId: id } });
+    await prisma.stock.deleteMany({ where: { productId: id } });
+    await prisma.labelItem.deleteMany({ where: { productId: id } }).catch(() => {});
+    await prisma.layawayItem.deleteMany({ where: { productId: id } }).catch(() => {});
+    await prisma.orderItem.deleteMany({ where: { productId: id } }).catch(() => {});
+    await prisma.purchaseItem.deleteMany({ where: { productId: id } }).catch(() => {});
+
+    // Eliminar variantes
+    await prisma.productVariant.deleteMany({ where: { productId: id } });
+
+    // Eliminar producto
     await prisma.product.delete({ where: { id } });
     res.json({ success: true, message: 'Producto eliminado' });
   } catch (error) {
-    res.status(500).json({ success: false, error: 'Error al eliminar producto' });
+    logger.error('Delete product error:', error);
+    // Si aun hay FK error, desactivar en vez de eliminar
+    try {
+      await prisma.product.update({ where: { id: req.params.id }, data: { status: 'INACTIVO' } });
+      res.json({ success: true, message: 'Producto desactivado' });
+    } catch (e) {
+      res.status(500).json({ success: false, error: 'Error al eliminar producto' });
+    }
   }
 };
 
@@ -375,21 +393,29 @@ exports.getCatalog = async (req, res) => {
     const fetchImageBuffer = (url) => new Promise((resolve) => {
       if (!url) return resolve(null);
       try {
-        // Convert relative URLs to absolute
         const absUrl = url.startsWith('http') ? url : BASE_URL + url;
         const parsedUrl = new URL(absUrl);
-        url = absUrl;
         const lib = parsedUrl.protocol === 'https:' ? https : http;
-        const req = lib.get(url, { timeout: 4000 }, (res) => {
-          if (res.statusCode !== 200) return resolve(null);
+        const req = lib.get(absUrl, {
+          timeout: 10000,
+          headers: { 'User-Agent': 'Maria-Bonita-POS/1.0' }
+        }, (res) => {
+          // Follow redirects
+          if (res.statusCode === 301 || res.statusCode === 302) {
+            return fetchImageBuffer(res.headers.location).then(resolve);
+          }
+          if (res.statusCode !== 200) {
+            console.warn('Image fetch failed:', absUrl, res.statusCode);
+            return resolve(null);
+          }
           const chunks = [];
           res.on('data', c => chunks.push(c));
           res.on('end', () => resolve(Buffer.concat(chunks)));
           res.on('error', () => resolve(null));
         });
-        req.on('error', () => resolve(null));
-        req.on('timeout', () => { req.destroy(); resolve(null); });
-      } catch { resolve(null); }
+        req.on('error', (e) => { console.warn('Image fetch error:', absUrl, e.message); resolve(null); });
+        req.on('timeout', () => { req.destroy(); console.warn('Image fetch timeout:', absUrl); resolve(null); });
+      } catch (e) { console.warn('Image fetch exception:', e.message); resolve(null); }
     });
 
     const fmt = (n) => Number(n || 0).toLocaleString('es-PY');
