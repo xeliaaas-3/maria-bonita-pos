@@ -59,12 +59,12 @@ export default function LabelsPage() {
     }
   };
 
-  const generateCatalog = async (withPrice = true) => {
+  const generateCatalog = async (withPrice = true, layout = 'grid') => {
     setPrinting(true);
     try {
       const catParam = selectedCats.length > 0 ? `&categories=${selectedCats.join(',')}` : '';
       const response = await api.get(
-        `/products/catalog?showPrice=${withPrice}${catParam}`,
+        `/products/catalog?showPrice=${withPrice}&layout=${layout}${catParam}`,
         { responseType: 'blob' }
       );
       const blob = new Blob([response.data], { type: 'application/pdf' });
@@ -174,8 +174,11 @@ export default function LabelsPage() {
               </div>
 
               <div className={clsx('border-t pt-3 space-y-2', isDark ? 'border-dark-700' : 'border-gray-100')}>
+                <p className={clsx('text-xs font-bold uppercase tracking-wide', isDark ? 'text-dark-300' : 'text-dark-600')}>
+                  Catálogo en cuadrícula
+                </p>
                 <button
-                  onClick={() => generateCatalog(true)}
+                  onClick={() => generateCatalog(true, 'grid')}
                   disabled={printing}
                   className="w-full flex items-center justify-center gap-2 py-2.5 bg-primary-500 hover:bg-primary-600 text-white text-sm font-semibold rounded-xl transition-colors disabled:opacity-50"
                 >
@@ -183,7 +186,32 @@ export default function LabelsPage() {
                   Con precios
                 </button>
                 <button
-                  onClick={() => generateCatalog(false)}
+                  onClick={() => generateCatalog(false, 'grid')}
+                  disabled={printing}
+                  className={clsx(
+                    'w-full flex items-center justify-center gap-2 py-2.5 text-sm font-semibold rounded-xl border transition-colors disabled:opacity-50',
+                    isDark ? 'border-dark-700 text-dark-300 hover:bg-dark-800' : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                  )}
+                >
+                  {printing ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+                  Sin precios
+                </button>
+              </div>
+
+              <div className={clsx('border-t pt-3 space-y-2', isDark ? 'border-dark-700' : 'border-gray-100')}>
+                <p className={clsx('text-xs font-bold uppercase tracking-wide', isDark ? 'text-dark-300' : 'text-dark-600')}>
+                  Ficha por producto (1 hoja c/u)
+                </p>
+                <button
+                  onClick={() => generateCatalog(true, 'poster')}
+                  disabled={printing}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 bg-primary-500 hover:bg-primary-600 text-white text-sm font-semibold rounded-xl transition-colors disabled:opacity-50"
+                >
+                  {printing ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+                  Con precios
+                </button>
+                <button
+                  onClick={() => generateCatalog(false, 'poster')}
                   disabled={printing}
                   className={clsx(
                     'w-full flex items-center justify-center gap-2 py-2.5 text-sm font-semibold rounded-xl border transition-colors disabled:opacity-50',
