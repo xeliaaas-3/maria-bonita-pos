@@ -341,6 +341,14 @@ const generateReportPDF = async (reportData, reportType, dateRange, settings = [
   });
 };
 
+// Logo de la empresa en base64 (para incrustar en el ticket HTML)
+const fs = require('fs');
+const path = require('path');
+let LOGO_BASE64 = null;
+try {
+  LOGO_BASE64 = fs.readFileSync(path.join(__dirname, '../assets/logo.png')).toString('base64');
+} catch { /* logo no disponible */ }
+
 // TICKET TÉRMICO HTML (58/80mm) - para imprimir desde navegador/celular
 const generateSaleTicketHTML = (sale, settings = []) => {
   const cfg = getSettings(settings);
@@ -388,31 +396,37 @@ const generateSaleTicketHTML = (sale, settings = []) => {
   }
   .center { text-align: center; }
   .bold { font-weight: bold; }
+  .logo { display: block; margin: 0 auto 6px; max-width: 55mm; max-height: 28mm; object-fit: contain; }
+  .company-name { font-family: 'Georgia', 'Times New Roman', serif; font-size: 17px; letter-spacing: 1px; }
   .line { border-top: 1px dashed #000; margin: 6px 0; }
+  .line-strong { border-top: 1.5px solid #000; margin: 6px 0; }
   .row { display: flex; justify-content: space-between; }
-  .item { margin-bottom: 3px; }
+  .item { margin-bottom: 4px; }
   .item-name { font-weight: bold; }
-  .item-row { display: flex; justify-content: space-between; }
-  .totals .row { font-size: 13px; }
-  .totals .grand { font-size: 16px; font-weight: bold; }
-  .footer { margin-top: 8px; font-size: 11px; }
+  .item-row { display: flex; justify-content: space-between; color: #333; }
+  .meta { color: #444; font-size: 11px; }
+  .totals .row { font-size: 13px; padding: 1px 0; }
+  .totals .grand { font-size: 17px; font-weight: bold; border-top: 1.5px solid #000; margin-top: 4px; padding-top: 4px; }
+  .badge { display: inline-block; border: 1px solid #000; border-radius: 4px; padding: 2px 8px; font-size: 10px; font-weight: bold; letter-spacing: 0.5px; margin-top: 4px; }
+  .footer { margin-top: 10px; font-size: 11px; }
+  .footer .thanks { font-family: 'Georgia', 'Times New Roman', serif; font-size: 14px; font-style: italic; margin-bottom: 4px; }
   @media print {
     body { width: 80mm; }
   }
 </style>
 </head>
 <body onload="window.print()">
-  <div class="center bold" style="font-size:14px;">${esc(COMPANY)}</div>
-  ${ADDRESS ? `<div class="center">${esc(ADDRESS)}</div>` : ''}
-  ${PHONE ? `<div class="center">Tel: ${esc(PHONE)}</div>` : ''}
-  ${TAX_ID ? `<div class="center">RUC: ${esc(TAX_ID)}</div>` : ''}
-  <div class="line"></div>
+  ${LOGO_BASE64 ? `<img class="logo" src="data:image/png;base64,${LOGO_BASE64}" alt="${esc(COMPANY)}" />` : `<div class="center bold company-name">${esc(COMPANY)}</div>`}
+  ${ADDRESS ? `<div class="center meta">${esc(ADDRESS)}</div>` : ''}
+  ${PHONE ? `<div class="center meta">Tel: ${esc(PHONE)}</div>` : ''}
+  ${TAX_ID ? `<div class="center meta">RUC: ${esc(TAX_ID)}</div>` : ''}
+  <div class="line-strong"></div>
   <div class="center bold">COMPROBANTE DE VENTA</div>
-  <div class="center">N. ${esc(sale.number)}</div>
-  <div class="center">${dateStr} ${timeStr}</div>
+  <div class="center meta">N. ${esc(sale.number)}</div>
+  <div class="center meta">${dateStr} ${timeStr}</div>
   <div class="line"></div>
-  <div>Cliente: ${esc(sale.customer?.name || 'CONSUMIDOR FINAL')}</div>
-  <div>Atendido: ${esc(sale.user?.name || '-')}</div>
+  <div class="meta">Cliente: ${esc(sale.customer?.name || 'CONSUMIDOR FINAL')}</div>
+  <div class="meta">Atendido: ${esc(sale.user?.name || '-')}</div>
   <div class="line"></div>
   ${itemsHTML}
   <div class="line"></div>
@@ -424,8 +438,8 @@ const generateSaleTicketHTML = (sale, settings = []) => {
   </div>
   <div class="line"></div>
   <div class="footer center">
-    ${esc(FOOTER)}<br/>
-    DOCUMENTO SIN VALIDEZ LEGAL
+    <div class="thanks">${esc(FOOTER)}</div>
+    <span class="badge">SIN VALIDEZ LEGAL</span>
   </div>
 </body>
 </html>`;
