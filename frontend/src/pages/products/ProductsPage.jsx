@@ -8,7 +8,7 @@ import { motion } from 'framer-motion';
 import {
   Plus, Search, Filter, Package, Edit2, Trash2,
   AlertTriangle, ChevronDown, Grid, List, Upload,
-  Download, MoreVertical, Eye, Barcode, Tag, Percent, Flame
+  Download, MoreVertical, Eye, Barcode, Tag, Percent, Flame, RotateCcw
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
@@ -59,6 +59,12 @@ export default function ProductsPage() {
     mutationFn: ({ id, pct }) => api.put(`/products/${id}`, { salePrice: Math.round(Number(discountProduct?.originalPrice || discountProduct?.salePrice) * (1 - pct / 100)) }),
     onSuccess: () => { toast.success('Precio de liquidación aplicado'); queryClient.invalidateQueries(['products']); setDiscountProduct(null); setDiscountPct(''); },
     onError: () => toast.error('Error')
+  });
+
+  const reactivateMutation = useMutation({
+    mutationFn: (id) => api.put(`/products/${id}`, { status: 'ACTIVO' }),
+    onSuccess: () => { toast.success('Producto reactivado'); queryClient.invalidateQueries(['products']); },
+    onError: () => toast.error('Error al reactivar')
   });
 
   const deleteMutation = useMutation({
@@ -208,6 +214,15 @@ export default function ProductsPage() {
                   >
                     <Percent className="w-4 h-4 text-amber-500" />
                   </button>
+                  {product.status === 'INACTIVO' && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); reactivateMutation.mutate(product.id); }}
+                      className="p-2 bg-white rounded-xl hover:bg-emerald-50"
+                      title="Reactivar producto"
+                    >
+                      <RotateCcw className="w-4 h-4 text-emerald-500" />
+                    </button>
+                  )}
                   {(hasRole('ADMIN') || hasRole('CAJERO')) && (
                     <button
                       onClick={() => setDeleteId(product.id)}
@@ -304,6 +319,15 @@ export default function ProductsPage() {
                       >
                         <Edit2 className="w-3.5 h-3.5" />
                       </button>
+                      {product.status === 'INACTIVO' && (
+                        <button
+                          onClick={() => reactivateMutation.mutate(product.id)}
+                          className={clsx('p-1.5 rounded-lg transition-colors', isDark ? 'hover:bg-emerald-500/10 text-dark-400 hover:text-emerald-400' : 'hover:bg-emerald-50 text-gray-400 hover:text-emerald-500')}
+                          title="Reactivar producto"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                       {(hasRole('ADMIN') || hasRole('CAJERO')) && (
                         <button
                           onClick={() => setDeleteId(product.id)}
