@@ -8,7 +8,7 @@ import { motion } from 'framer-motion';
 import {
   Plus, Search, Filter, Package, Edit2, Trash2,
   AlertTriangle, ChevronDown, Grid, List, Upload,
-  Download, MoreVertical, Eye, Barcode, Tag, Percent, Flame, RotateCcw
+  Download, MoreVertical, Eye, Barcode, Tag, Percent, Flame, RotateCcw, X
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
