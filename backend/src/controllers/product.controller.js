@@ -632,18 +632,43 @@ exports.getCatalog = async (req, res) => {
         // image placeholder background
         doc.rect(imgX, imgY, CARD_W, IMG_H).fill(C_XLGRAY);
 
-        // try to embed image
-        const imgUrl = product.images?.[0];
+        // try to embed images — main photo + small strip with extra angles (frente/espalda/costado)
+        const productImages = (product.images || []).filter(Boolean);
+        const imgUrl = productImages[0];
+        const extraImgs = productImages.slice(1, 4); // up to 3 extra angles
+        const THUMB_H = extraImgs.length ? 26 : 0;
+        const MAIN_H  = IMG_H - THUMB_H;
+
         if (imgUrl) {
           const imgBuf = await fetchImageBuffer(imgUrl);
           if (imgBuf) {
             try {
-              // clip to image area
+              // clip to main image area
               doc.save();
-              doc.rect(imgX, imgY, CARD_W, IMG_H).clip();
-              doc.image(imgBuf, imgX, imgY, { width: CARD_W, height: IMG_H, cover: [CARD_W, IMG_H], align: 'center', valign: 'center' });
+              doc.rect(imgX, imgY, CARD_W, MAIN_H).clip();
+              doc.image(imgBuf, imgX, imgY, { width: CARD_W, height: MAIN_H, cover: [CARD_W, MAIN_H], align: 'center', valign: 'center' });
               doc.restore();
             } catch { /* keep placeholder */ }
+          }
+        }
+
+        // thumbnail strip with additional angles (front/back/side)
+        if (extraImgs.length) {
+          const thumbY = imgY + MAIN_H + 1;
+          const thumbGap = 1;
+          const thumbW = (CARD_W - thumbGap * (extraImgs.length - 1)) / extraImgs.length;
+          for (let ti = 0; ti < extraImgs.length; ti++) {
+            const thumbX = imgX + ti * (thumbW + thumbGap);
+            doc.rect(thumbX, thumbY, thumbW, THUMB_H - 1).fill(C_XLGRAY);
+            const thumbBuf = await fetchImageBuffer(extraImgs[ti]);
+            if (thumbBuf) {
+              try {
+                doc.save();
+                doc.rect(thumbX, thumbY, thumbW, THUMB_H - 1).clip();
+                doc.image(thumbBuf, thumbX, thumbY, { width: thumbW, height: THUMB_H - 1, cover: [thumbW, THUMB_H - 1], align: 'center', valign: 'center' });
+                doc.restore();
+              } catch { /* keep placeholder */ }
+            }
           }
         }
 
