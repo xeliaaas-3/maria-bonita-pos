@@ -500,106 +500,107 @@ exports.getCatalog = async (req, res) => {
     doc.rect(0, PAGE_H - 6, PAGE_W, 6).fill(C_ACCENT);
 
     // ══════════════════════════════════════════════════════════
-    // POSTER LAYOUT — una pagina entera por producto
+    // POSTER LAYOUT — dos fichas por hoja (media pagina cada una)
     // ══════════════════════════════════════════════════════════
     if (layout === 'poster') {
-      for (const product of products) {
-        doc.addPage();
-        doc.rect(0, 0, PAGE_W, PAGE_H).fill(C_BG);
-        doc.rect(0, 0, PAGE_W, 6).fill(C_ACCENT);
-        doc.rect(0, PAGE_H - 6, PAGE_W, 6).fill(C_ACCENT);
+      const HALF_H = (PAGE_H - 2 * GAP) / 2;
+      const safeArr = (arr) => arr.map(v => tr(String(v)));
 
-        // ── header ──
-        const headY = 26;
-        doc.fontSize(11).font('Helvetica-Bold').fillColor(C_BLACK)
-           .text(COMPANY.toUpperCase(), ML, headY, { width: INNER * 0.6, characterSpacing: 2 });
-        doc.fontSize(8).font('Helvetica').fillColor(C_MGRAY)
-           .text(tr(product.category?.name || ''), ML, headY, { width: INNER, align: 'right' });
+      const drawCard = async (product, baseY) => {
+        const PAD = 14;
+        const innerW = PAGE_W - 2 * GAP;
+        const innerH = HALF_H;
 
-        // ── product title ──
+        // card background + accent border
+        doc.rect(GAP, baseY, innerW, innerH).fill('#eef0fa');
+        doc.rect(GAP, baseY, innerW, 5).fill(C_ACCENT);
+
+        // ── header: marca/empresa + categoria ──
+        doc.fontSize(9).font('Helvetica-Bold').fillColor(C_BLACK)
+           .text(COMPANY.toUpperCase(), GAP + PAD, baseY + 12, { width: innerW - 2 * PAD, characterSpacing: 2 });
+        doc.fontSize(7).font('Helvetica').fillColor(C_MGRAY)
+           .text(tr(product.category?.name || '').toUpperCase(), GAP + PAD, baseY + 12, { width: innerW - 2 * PAD, align: 'right', characterSpacing: 1 });
+
+        // ── titulo del producto ──
         const safeName = tr(product.name) || tr(product.name.replace(/./g, '?'));
-        doc.fontSize(26).font('Helvetica-Bold').fillColor(C_BLACK)
-           .text(safeName.toUpperCase(), ML, headY + 22, { width: INNER });
+        doc.fontSize(20).font('Helvetica-Bold').fillColor(C_BLACK)
+           .text(safeName.toUpperCase(), GAP + PAD, baseY + 24, { width: innerW - 2 * PAD, lineBreak: false, ellipsis: true });
 
-        const titleH = doc.heightOfString(safeName.toUpperCase(), { width: INNER, fontSize: 26 });
-        const contentTop = headY + 22 + titleH + 14;
-        const FOOTER_H = 40;
-        const contentH = PAGE_H - contentTop - FOOTER_H;
-
+        // ── imagenes ──
+        const imgTop = baseY + 50;
+        const imgH   = innerH - 50 - 30; // dejar espacio para footer
         const productImages = (product.images || []).filter(Boolean);
         const mainImg  = productImages[0];
-        const sideImgs = productImages.slice(1, 3); // hasta 2 fotos pequeñas (frente/espalda u otros angulos)
+        const sideImgs = productImages.slice(1, 3);
 
-        const LEFT_W  = INNER * 0.33;
-        const RIGHT_W = INNER - LEFT_W - GAP;
+        const LEFT_W  = innerW * 0.30 - PAD;
+        const RIGHT_W = innerW - LEFT_W - PAD * 2 - 6;
+        const leftX  = GAP + PAD;
+        const rightX = leftX + LEFT_W + 6;
 
-        // ── columna izquierda: imagenes pequeñas apiladas ──
+        // columna izquierda: hasta 2 imagenes apiladas
         const thumbCount = Math.max(sideImgs.length, 1);
-        const thumbH = (contentH - GAP * (thumbCount - 1)) / thumbCount;
+        const thumbGap = 5;
+        const thumbH = (imgH - thumbGap * (thumbCount - 1)) / thumbCount;
         for (let i = 0; i < thumbCount; i++) {
-          const tx = ML;
-          const ty = contentTop + i * (thumbH + GAP);
-          doc.rect(tx, ty, LEFT_W, thumbH).fill(C_XLGRAY);
+          const ty = imgTop + i * (thumbH + thumbGap);
+          doc.rect(leftX, ty, LEFT_W, thumbH).fill('#ffffff');
           const url = sideImgs[i];
           if (url) {
             const buf = await fetchImageBuffer(url);
             if (buf) {
               try {
                 doc.save();
-                doc.rect(tx, ty, LEFT_W, thumbH).clip();
-                doc.image(buf, tx, ty, { width: LEFT_W, height: thumbH, cover: [LEFT_W, thumbH], align: 'center', valign: 'center' });
+                doc.rect(leftX, ty, LEFT_W, thumbH).clip();
+                doc.image(buf, leftX, ty, { width: LEFT_W, height: thumbH, cover: [LEFT_W, thumbH], align: 'center', valign: 'center' });
                 doc.restore();
               } catch { /* keep placeholder */ }
             }
-          } else if (!mainImg) {
-            doc.fontSize(8).font('Helvetica').fillColor('#9ca3af')
-               .text('Sin imagen', tx, ty + thumbH / 2 - 4, { width: LEFT_W, align: 'center' });
           }
-          doc.rect(tx, ty, LEFT_W, thumbH).lineWidth(0.5).strokeColor(C_LGRAY).stroke();
         }
 
-        // ── columna derecha: imagen principal grande ──
-        const mx = ML + LEFT_W + GAP;
-        const my = contentTop;
-        doc.rect(mx, my, RIGHT_W, contentH).fill(C_XLGRAY);
+        // columna derecha: imagen principal grande
+        doc.rect(rightX, imgTop, RIGHT_W, imgH).fill('#ffffff');
         if (mainImg) {
           const buf = await fetchImageBuffer(mainImg);
           if (buf) {
             try {
               doc.save();
-              doc.rect(mx, my, RIGHT_W, contentH).clip();
-              doc.image(buf, mx, my, { width: RIGHT_W, height: contentH, cover: [RIGHT_W, contentH], align: 'center', valign: 'center' });
+              doc.rect(rightX, imgTop, RIGHT_W, imgH).clip();
+              doc.image(buf, rightX, imgTop, { width: RIGHT_W, height: imgH, cover: [RIGHT_W, imgH], align: 'center', valign: 'center' });
               doc.restore();
             } catch { /* keep placeholder */ }
           }
         } else {
-          doc.fontSize(11).font('Helvetica').fillColor('#9ca3af')
-             .text('Sin imagen', mx, my + contentH / 2 - 6, { width: RIGHT_W, align: 'center' });
+          doc.fontSize(10).font('Helvetica').fillColor('#9ca3af')
+             .text('Sin imagen', rightX, imgTop + imgH / 2 - 5, { width: RIGHT_W, align: 'center' });
         }
-        doc.rect(mx, my, RIGHT_W, contentH).lineWidth(0.5).strokeColor(C_LGRAY).stroke();
-        doc.rect(mx, my, RIGHT_W, 3).fill(C_ACCENT);
 
         // ── footer: detalles + precio ──
-        const footY = PAGE_H - FOOTER_H;
-        doc.moveTo(ML, footY).lineTo(PAGE_W - MR, footY)
-           .lineWidth(0.5).strokeColor(C_LGRAY).stroke();
-
+        const footY = imgTop + imgH + 6;
         const sizes  = [...new Set(product.variants.map(v => v.size).filter(Boolean))];
         const colors = [...new Set(product.variants.map(v => v.color).filter(Boolean))];
-        const safeArr = (arr) => arr.map(v => tr(String(v)));
         const detailParts = [
-          product.brand?.name ? 'Marca: ' + tr(product.brand.name) : null,
+          product.brand?.name ? tr(product.brand.name) : null,
           sizes.length  ? 'Talles: ' + safeArr(sizes).join(' ')   : null,
           colors.length ? 'Colores: ' + safeArr(colors).join(', ') : null,
-          'SKU: ' + tr(String(product.sku || ''))
         ].filter(Boolean).join('   -   ');
 
-        doc.fontSize(9).font('Helvetica').fillColor(C_DGRAY)
-           .text(detailParts, ML, footY + 12, { width: showPrice ? INNER * 0.65 : INNER });
+        doc.fontSize(8).font('Helvetica').fillColor(C_DGRAY)
+           .text(detailParts, GAP + PAD, footY, { width: showPrice ? innerW * 0.6 - PAD : innerW - 2 * PAD, lineBreak: false, ellipsis: true });
 
         if (showPrice) {
-          doc.fontSize(18).font('Helvetica-Bold').fillColor(C_ACCENT)
-             .text('Gs. ' + fmt(product.salePrice), ML, footY + 8, { width: INNER, align: 'right' });
+          doc.fontSize(15).font('Helvetica-Bold').fillColor(C_ACCENT)
+             .text('Gs. ' + fmt(product.salePrice), GAP + PAD, footY - 2, { width: innerW - 2 * PAD, align: 'right' });
+        }
+      };
+
+      for (let pi = 0; pi < products.length; pi += 2) {
+        doc.addPage();
+        doc.rect(0, 0, PAGE_W, PAGE_H).fill(C_BG);
+        await drawCard(products[pi], GAP);
+        if (products[pi + 1]) {
+          await drawCard(products[pi + 1], GAP + HALF_H + 2 * GAP);
         }
       }
 
