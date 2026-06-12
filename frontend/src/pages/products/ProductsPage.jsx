@@ -194,7 +194,7 @@ export default function ProductsPage() {
                   </div>
                 )}
                 {/* Quick actions */}
-                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2" onClick={e => e.stopPropagation()}>
+                <div className="absolute inset-0 bg-black/10 sm:bg-black/40 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2" onClick={e => e.stopPropagation()}>
                   <button
                     onClick={() => navigate(`/products/${product.id}/edit`)}
                     className="p-2 bg-white rounded-xl hover:bg-primary-50"
