@@ -9,6 +9,7 @@ RUN apt-get update && apt-get install -y \
     python3 \
     make \
     g++ \
+    postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
 # Instalar dependencias Node

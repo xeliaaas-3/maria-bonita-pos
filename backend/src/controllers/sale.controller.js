@@ -5,7 +5,7 @@
 const { PrismaClient } = require('@prisma/client');
 const { logger } = require('../utils/logger');
 const { getSocket } = require('../services/socket.service');
-const { generateSalePDF } = require('../services/pdf.service');
+const { generateSalePDF, generateSaleTicketHTML } = require('../services/pdf.service');
 const { generateSaleNumber } = require('../utils/helpers');
 
 const prisma = new PrismaClient();
@@ -422,6 +422,35 @@ exports.getSaleTicket = async (req, res) => {
     res.send(pdfBuffer);
   } catch (error) {
     logger.error('Generate ticket error:', error);
+    res.status(500).json({ success: false, error: 'Error al generar ticket' });
+  }
+};
+
+// GENERAR TICKET TÉRMICO HTML (80mm) - imprimir desde navegador/celular
+exports.getSaleTicketHtml = async (req, res) => {
+  try {
+    const sale = await prisma.sale.findUnique({
+      where: { id: req.params.id },
+      include: {
+        items: { include: { product: true } },
+        payments: true,
+        customer: true,
+        user: { select: { name: true } },
+        branch: true
+      }
+    });
+
+    if (!sale) {
+      return res.status(404).json({ success: false, error: 'Venta no encontrada' });
+    }
+
+    const settings = await prisma.setting.findMany({ where: { group: 'company' } });
+    const html = generateSaleTicketHTML(sale, settings);
+
+    res.setHeader('Content-Type', 'text/html');
+    res.send(html);
+  } catch (error) {
+    logger.error('Generate ticket html error:', error);
     res.status(500).json({ success: false, error: 'Error al generar ticket' });
   }
 };

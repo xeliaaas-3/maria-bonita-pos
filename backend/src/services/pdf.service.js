@@ -341,4 +341,94 @@ const generateReportPDF = async (reportData, reportType, dateRange, settings = [
   });
 };
 
-module.exports = { generateSalePDF, generateReportPDF };
+// TICKET TÉRMICO HTML (58/80mm) - para imprimir desde navegador/celular
+const generateSaleTicketHTML = (sale, settings = []) => {
+  const cfg = getSettings(settings);
+  const COMPANY  = String(cfg['company.name']      || 'MI BOUTIQUE');
+  const ADDRESS  = String(cfg['company.address']   || '');
+  const PHONE    = String(cfg['company.phone']     || '');
+  const TAX_ID   = String(cfg['company.taxId']     || '');
+  const FOOTER   = String(cfg['pos.receiptFooter'] || 'Gracias por su compra!');
+
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+
+  const dt = new Date(sale.createdAt);
+  const dateStr = dt.toLocaleDateString('es-PY', { day:'2-digit', month:'2-digit', year:'numeric' });
+  const timeStr = dt.toLocaleTimeString('es-PY', { hour:'2-digit', minute:'2-digit' });
+
+  const payStr = (sale.payments || []).map(p => ({
+    EFECTIVO:'Efectivo', TARJETA:'Tarjeta',
+    TRANSFERENCIA:'Transferencia', QR:'QR', MIXTO:'Mixto'
+  }[p.method] || p.method)).join(', ') || '-';
+
+  const itemsHTML = (sale.items || []).map(item => `
+    <div class="item">
+      <div class="item-name">${esc(item.name)}</div>
+      <div class="item-row">
+        <span>${item.quantity} x ${fmt(item.unitPrice)}</span>
+        <span>${fmt(item.total)}</span>
+      </div>
+    </div>`).join('');
+
+  return `<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<title>Ticket ${esc(sale.number)}</title>
+<style>
+  @page { size: 80mm auto; margin: 0; }
+  * { box-sizing: border-box; }
+  body {
+    width: 80mm;
+    margin: 0;
+    padding: 8px;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    color: #000;
+  }
+  .center { text-align: center; }
+  .bold { font-weight: bold; }
+  .line { border-top: 1px dashed #000; margin: 6px 0; }
+  .row { display: flex; justify-content: space-between; }
+  .item { margin-bottom: 3px; }
+  .item-name { font-weight: bold; }
+  .item-row { display: flex; justify-content: space-between; }
+  .totals .row { font-size: 13px; }
+  .totals .grand { font-size: 16px; font-weight: bold; }
+  .footer { margin-top: 8px; font-size: 11px; }
+  @media print {
+    body { width: 80mm; }
+  }
+</style>
+</head>
+<body onload="window.print()">
+  <div class="center bold" style="font-size:14px;">${esc(COMPANY)}</div>
+  ${ADDRESS ? `<div class="center">${esc(ADDRESS)}</div>` : ''}
+  ${PHONE ? `<div class="center">Tel: ${esc(PHONE)}</div>` : ''}
+  ${TAX_ID ? `<div class="center">RUC: ${esc(TAX_ID)}</div>` : ''}
+  <div class="line"></div>
+  <div class="center bold">COMPROBANTE DE VENTA</div>
+  <div class="center">N. ${esc(sale.number)}</div>
+  <div class="center">${dateStr} ${timeStr}</div>
+  <div class="line"></div>
+  <div>Cliente: ${esc(sale.customer?.name || 'CONSUMIDOR FINAL')}</div>
+  <div>Atendido: ${esc(sale.user?.name || '-')}</div>
+  <div class="line"></div>
+  ${itemsHTML}
+  <div class="line"></div>
+  <div class="totals">
+    ${Number(sale.discount) > 0 ? `<div class="row"><span>Descuento</span><span>-${fmt(sale.discount)}</span></div>` : ''}
+    <div class="row grand"><span>TOTAL</span><span>${fmt(sale.total)}</span></div>
+    ${Number(sale.change) > 0 ? `<div class="row"><span>Vuelto</span><span>${fmt(sale.change)}</span></div>` : ''}
+    <div class="row"><span>Pago</span><span>${esc(payStr)}</span></div>
+  </div>
+  <div class="line"></div>
+  <div class="footer center">
+    ${esc(FOOTER)}<br/>
+    DOCUMENTO SIN VALIDEZ LEGAL
+  </div>
+</body>
+</html>`;
+};
+
+module.exports = { generateSalePDF, generateReportPDF, generateSaleTicketHTML };

@@ -4,38 +4,28 @@ echo "==============================="
 echo "  Boutique POS Backend"
 echo "==============================="
 
-# Esperar PostgreSQL
-echo "Esperando PostgreSQL..."
-RETRIES=30
-until nc -z postgres 5432; do
+if [ -z "$DATABASE_URL" ]; then
+  echo "ERROR: DATABASE_URL no definido"
+  exit 1
+fi
+
+# Crear/actualizar tablas desde el schema (esperando que la DB esté lista)
+echo "Sincronizando esquema con la base de datos..."
+RETRIES=15
+until npx prisma db push --accept-data-loss; do
   RETRIES=$((RETRIES-1))
   if [ $RETRIES -eq 0 ]; then
-    echo "ERROR: No se pudo conectar a PostgreSQL"
+    echo "ERROR al crear tablas"
     exit 1
   fi
-  echo "  Reintentando... ($RETRIES)"
-  sleep 2
+  echo "  Reintentando en 3s... ($RETRIES intentos restantes)"
+  sleep 3
 done
-echo "PostgreSQL listo. Esperando 3s..."
-sleep 3
-
-# Crear tablas desde el schema (no necesita archivos de migración)
-echo "Creando/actualizando tablas..."
-npx prisma db push --accept-data-loss
-if [ $? -ne 0 ]; then
-  echo "ERROR al crear tablas"
-  exit 1
-fi
 echo "Tablas OK"
 
-# Seed
+# Seed (solo crea datos si no existen)
 echo "Ejecutando seed..."
-node prisma/seed.js
-if [ $? -ne 0 ]; then
-  echo "ERROR en seed"
-  exit 1
-fi
-echo "Seed OK"
+node prisma/seed.js || echo "Seed omitido o ya ejecutado"
 
 # Servidor
 echo "Iniciando servidor Node.js..."

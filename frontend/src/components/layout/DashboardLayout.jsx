@@ -5,6 +5,7 @@
 import { useState, useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useQueryClient } from '@tanstack/react-query';
 import Sidebar from './Sidebar';
 import Topbar from './Topbar';
 import { useThemeStore } from '@/store/theme.store';
@@ -18,6 +19,7 @@ export default function DashboardLayout() {
   const location = useLocation();
   const { isDark } = useThemeStore();
   const { user } = useAuthStore();
+  const queryClient = useQueryClient();
 
   // Cerrar sidebar mobile al cambiar ruta
   useEffect(() => {
@@ -34,17 +36,31 @@ export default function DashboardLayout() {
     };
 
     const handleNewSale = () => {
-      // Actualizar stats en tiempo real
+      // Sincronizar datos entre dispositivos de la misma sucursal
+      queryClient.invalidateQueries(['dashboard']);
+      queryClient.invalidateQueries(['cash-session-active']);
+      queryClient.invalidateQueries(['products']);
+      queryClient.invalidateQueries(['inventory']);
+      queryClient.invalidateQueries(['pos-search']);
+      queryClient.invalidateQueries(['sales']);
+    };
+
+    const handleStockUpdate = () => {
+      queryClient.invalidateQueries(['products']);
+      queryClient.invalidateQueries(['inventory']);
+      queryClient.invalidateQueries(['pos-search']);
     };
 
     socket.on('stock:low', handleStockLow);
     socket.on('sale:created', handleNewSale);
+    socket.on('stock:updated', handleStockUpdate);
 
     return () => {
       socket.off('stock:low', handleStockLow);
       socket.off('sale:created', handleNewSale);
+      socket.off('stock:updated', handleStockUpdate);
     };
-  }, []);
+  }, [queryClient]);
 
   return (
     <div className={`flex h-screen overflow-hidden ${isDark ? 'dark bg-dark-950' : 'bg-gray-50'}`}>

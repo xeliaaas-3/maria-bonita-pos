@@ -13,6 +13,7 @@ const rateLimit = require('express-rate-limit');
 const path = require('path');
 
 const { initSocket } = require('./services/socket.service');
+const { initBackupSchedule } = require('./services/backup.service');
 const { logger } = require('./utils/logger');
 const { connectRedis } = require('./utils/redis');
 const routes = require('./routes');
@@ -115,6 +116,7 @@ async function startServer() {
       logger.info(`🚀 Servidor corriendo en puerto ${PORT}`);
       logger.info(`📦 Ambiente: ${process.env.NODE_ENV || 'development'}`);
       logger.info(`🔗 API: http://localhost:${PORT}/api/v1`);
+      initBackupSchedule();
     });
   } catch (error) {
     logger.error('Error al iniciar servidor:', error);

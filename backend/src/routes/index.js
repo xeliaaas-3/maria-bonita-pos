@@ -21,6 +21,7 @@ router.use('/reports',        authenticate, require('./report.routes'));
 router.use('/users',          authenticate, require('./user.routes'));
 router.use('/branches',       authenticate, require('./branch.routes'));
 router.use('/settings',       authenticate, require('./setting.routes'));
+router.use('/backups',        authenticate, require('./backup.routes'));
 router.use('/notifications',  authenticate, require('./notification.routes'));
 router.use('/uploads',        authenticate, require('./upload.routes'));
 router.use('/upload',         authenticate, require('./upload.routes')); // alias sin 's'

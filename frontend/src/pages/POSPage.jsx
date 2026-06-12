@@ -20,6 +20,7 @@ import { clsx } from 'clsx';
 import CustomerSearch from '@/components/pos/CustomerSearch';
 import PaymentModal from '@/components/pos/PaymentModal';
 import OpenCashModal from '@/components/pos/OpenCashModal';
+import { queueSale, isNetworkError } from '@/utils/offlineQueue';
 
 export default function POSPage() {
   const { isDark } = useThemeStore();
@@ -66,7 +67,18 @@ export default function POSPage() {
       queryClient.invalidateQueries(['dashboard']);
       queryClient.invalidateQueries(['cash-session-active']);
     },
-    onError: (error) => {
+    onError: async (error, saleData) => {
+      if (isNetworkError(error)) {
+        await queueSale(saleData);
+        setLastSale(null);
+        setShowSuccess('offline');
+        setCart([]);
+        setCustomer(null);
+        setDiscount({ value: 0, type: 'MONTO' });
+        setShowPayment(false);
+        toast.success('Sin conexión: la venta se guardó y se enviará automáticamente');
+        return;
+      }
       toast.error(error.response?.data?.error || 'Error al procesar la venta');
     }
   });
@@ -135,11 +147,25 @@ export default function POSPage() {
     createSaleMutation.mutate(saleData);
   };
 
-  // Imprimir ticket de la última venta
+  // Imprimir comprobante PDF (A4)
   const printTicket = async (saleId) => {
     try {
       const response = await api.get(`/sales/${saleId}/ticket`, { responseType: 'blob' });
       const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const win = window.open(url, '_blank');
+      win?.focus();
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch {
+      toast.error('Error al generar el ticket');
+    }
+  };
+
+  // Imprimir ticket térmico (80mm) - ideal para celular/impresora térmica
+  const printThermalTicket = async (saleId) => {
+    try {
+      const response = await api.get(`/sales/${saleId}/ticket-html`, { responseType: 'text' });
+      const blob = new Blob([response.data], { type: 'text/html' });
       const url = URL.createObjectURL(blob);
       const win = window.open(url, '_blank');
       win?.focus();
@@ -190,9 +216,9 @@ export default function POSPage() {
   }
 
   return (
-    <div className={clsx('flex h-[calc(100vh-64px)] overflow-hidden', isDark ? 'bg-dark-950' : 'bg-gray-50')}>
+    <div className={clsx('flex flex-col lg:flex-row min-h-[calc(100vh-64px)] lg:h-[calc(100vh-64px)] lg:overflow-hidden', isDark ? 'bg-dark-950' : 'bg-gray-50')}>
       {/* Left: Product Search */}
-      <div className="flex-1 flex flex-col overflow-hidden p-4 gap-4">
+      <div className="flex-1 flex flex-col lg:overflow-hidden p-3 sm:p-4 gap-3 sm:gap-4">
         {/* Search Bar */}
         <div className={clsx('flex items-center gap-3 px-4 py-3 rounded-2xl border', cardBase)}>
           <Search className={clsx('w-5 h-5 shrink-0', isDark ? 'text-dark-400' : 'text-gray-400')} />
@@ -219,7 +245,7 @@ export default function POSPage() {
         </div>
 
         {/* Product Grid */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 lg:overflow-y-auto">
           {searchQuery.length < 2 ? (
             <div className={clsx('flex flex-col items-center justify-center h-full gap-3', isDark ? 'text-dark-600' : 'text-gray-300')}>
               <Package className="w-16 h-16" />
@@ -273,7 +299,7 @@ export default function POSPage() {
       </div>
 
       {/* Right: Cart */}
-      <div className={clsx('w-80 xl:w-96 flex flex-col border-l', isDark ? 'bg-dark-900 border-dark-800' : 'bg-white border-gray-100')}>
+      <div className={clsx('w-full lg:w-80 xl:w-96 flex flex-col border-t lg:border-t-0 lg:border-l lg:overflow-hidden', isDark ? 'bg-dark-900 border-dark-800' : 'bg-white border-gray-100')}>
         {/* Cart Header */}
         <div className={clsx('flex items-center justify-between p-4 border-b', isDark ? 'border-dark-800' : 'border-gray-100')}>
           <div className="flex items-center gap-2">
@@ -301,7 +327,7 @@ export default function POSPage() {
         </div>
 
         {/* Cart Items */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+        <div className="flex-1 overflow-y-auto p-4 space-y-3 max-h-[50vh] lg:max-h-none">
           <AnimatePresence>
             {cart.length === 0 ? (
               <motion.div
@@ -345,18 +371,18 @@ export default function POSPage() {
                     <div className={clsx('flex items-center gap-2 rounded-lg', isDark ? 'bg-dark-700' : 'bg-white')}>
                       <button
                         onClick={() => updateQuantity(item.key, -1)}
-                        className={clsx('w-7 h-7 rounded-lg flex items-center justify-center transition-colors', isDark ? 'hover:bg-dark-600 text-dark-300' : 'hover:bg-gray-100 text-gray-600')}
+                        className={clsx('w-9 h-9 rounded-lg flex items-center justify-center transition-colors active:scale-95', isDark ? 'hover:bg-dark-600 text-dark-300' : 'hover:bg-gray-100 text-gray-600')}
                       >
-                        <Minus className="w-3 h-3" />
+                        <Minus className="w-4 h-4" />
                       </button>
                       <span className={clsx('text-sm font-bold w-5 text-center', isDark ? 'text-white' : 'text-dark-900')}>
                         {item.quantity}
                       </span>
                       <button
                         onClick={() => updateQuantity(item.key, 1)}
-                        className={clsx('w-7 h-7 rounded-lg flex items-center justify-center transition-colors', isDark ? 'hover:bg-dark-600 text-dark-300' : 'hover:bg-gray-100 text-gray-600')}
+                        className={clsx('w-9 h-9 rounded-lg flex items-center justify-center transition-colors active:scale-95', isDark ? 'hover:bg-dark-600 text-dark-300' : 'hover:bg-gray-100 text-gray-600')}
                       >
-                        <Plus className="w-3 h-3" />
+                        <Plus className="w-4 h-4" />
                       </button>
                     </div>
                     <span className={clsx('text-sm font-bold', isDark ? 'text-white' : 'text-dark-900')}>
@@ -370,7 +396,7 @@ export default function POSPage() {
         </div>
 
         {/* Totals & Payment */}
-        <div className={clsx('p-4 border-t space-y-3', isDark ? 'border-dark-800' : 'border-gray-100')}>
+        <div className={clsx('p-4 border-t space-y-3 sticky bottom-0', isDark ? 'border-dark-800 bg-dark-900' : 'border-gray-100 bg-white')}>
           {/* Discount */}
           <div className="flex items-center gap-2">
             <Percent className={clsx('w-4 h-4 shrink-0', isDark ? 'text-dark-400' : 'text-gray-400')} />
@@ -422,7 +448,7 @@ export default function POSPage() {
             onClick={() => setShowPayment(true)}
             disabled={cart.length === 0}
             className={clsx(
-              'w-full py-3.5 rounded-xl font-semibold text-sm transition-all flex items-center justify-center gap-2',
+              'w-full py-4 rounded-xl font-semibold text-base transition-all flex items-center justify-center gap-2 active:scale-[0.99]',
               cart.length === 0
                 ? 'bg-gray-200 text-gray-400 cursor-not-allowed dark:bg-dark-800 dark:text-dark-600'
                 : 'bg-primary-500 hover:bg-primary-600 text-white shadow-glow hover:shadow-lg'
@@ -434,8 +460,37 @@ export default function POSPage() {
         </div>
       </div>
 
+      {/* ── Modal Venta Guardada Offline ── */}
+      {showSuccess === 'offline' && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ backdropFilter: 'blur(6px)', background: 'rgba(0,0,0,0.6)' }}
+        >
+          <div className={clsx(
+            'w-full max-w-sm rounded-3xl shadow-2xl border overflow-hidden',
+            isDark ? 'bg-dark-900 border-dark-800' : 'bg-white border-gray-100'
+          )}>
+            <div className="bg-amber-500 px-6 pt-8 pb-6 text-center">
+              <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-3">
+                <AlertCircle className="w-9 h-9 text-white" />
+              </div>
+              <p className="text-white font-bold text-xl">Venta guardada (sin conexión)</p>
+              <p className="text-amber-100 text-sm mt-0.5">Se enviará automáticamente al recuperar internet</p>
+            </div>
+            <div className="px-6 py-5">
+              <button
+                onClick={() => setShowSuccess(false)}
+                className="w-full py-3 rounded-xl font-medium text-sm bg-primary-500 hover:bg-primary-600 text-white transition-colors"
+              >
+                Nueva Venta
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Modal Éxito Post-Venta ── */}
-      {showSuccess && lastSale && (
+      {showSuccess === true && lastSale && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
           style={{ backdropFilter: 'blur(6px)', background: 'rgba(0,0,0,0.6)' }}
@@ -482,11 +537,22 @@ export default function POSPage() {
 
               {/* Actions */}
               <button
-                onClick={() => printTicket(lastSale.id)}
+                onClick={() => printThermalTicket(lastSale.id)}
                 className="w-full flex items-center justify-center gap-2 py-3 bg-primary-500 hover:bg-primary-600 text-white font-semibold rounded-xl transition-colors"
               >
                 <Printer className="w-4 h-4" />
-                Imprimir Comprobante
+                Imprimir Ticket (térmico)
+              </button>
+
+              <button
+                onClick={() => printTicket(lastSale.id)}
+                className={clsx(
+                  'w-full flex items-center justify-center gap-2 py-3 font-medium text-sm rounded-xl transition-colors',
+                  isDark ? 'bg-dark-800 text-dark-300 hover:bg-dark-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                )}
+              >
+                <Printer className="w-4 h-4" />
+                Comprobante PDF (A4)
               </button>
 
               <button

@@ -116,6 +116,9 @@ exports.adjustStock = async (req, res) => {
       });
     }
 
+    // Sincronizar inventario en otros dispositivos de la sucursal
+    emitToBranch(branch, 'stock:updated', { productId, variantId, branchId: branch, newQuantity: newQty });
+
     res.json({ success: true, message: 'Stock ajustado', data: { newQuantity: newQty } });
   } catch (error) {
     logger.error('Adjust stock error:', error);
@@ -228,6 +231,9 @@ exports.createTransfer = async (req, res) => {
 
       return t;
     });
+
+    emitToBranch(fromBranchId, 'stock:updated', { branchId: fromBranchId });
+    emitToBranch(toBranchId, 'stock:updated', { branchId: toBranchId });
 
     res.status(201).json({ success: true, data: transfer });
   } catch (error) {

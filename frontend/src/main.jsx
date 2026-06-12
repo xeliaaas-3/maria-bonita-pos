@@ -7,6 +7,11 @@ import './index.css';
 import { useAuthStore } from './store/auth.store';
 import api from './services/api';
 import { socket } from './services/socket';
+import { registerSW } from 'virtual:pwa-register';
+import { initOfflineSync } from './utils/offlineQueue';
+
+registerSW({ immediate: true });
+initOfflineSync();
 
 // Configurar token al inicio
 const { accessToken, isAuthenticated, user } = useAuthStore.getState();
