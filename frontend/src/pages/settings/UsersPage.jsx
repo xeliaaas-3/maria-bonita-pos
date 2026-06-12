@@ -5,7 +5,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { Plus, Edit2, Key, UserX, UserCheck, Shield, Users, Loader2 } from 'lucide-react';
+import { Plus, Edit2, Key, UserX, UserCheck, Shield, Users, Loader2, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useForm } from 'react-hook-form';
 import api from '@/services/api';
@@ -25,6 +25,10 @@ export default function UsersPage() {
   const queryClient = useQueryClient();
   const [showModal, setShowModal] = useState(false);
   const [editUser, setEditUser] = useState(null);
+  const [pwdUser, setPwdUser] = useState(null);
+  const [pwdValue, setPwdValue] = useState('');
+  const [pwdConfirm, setPwdConfirm] = useState('');
+  const [showPwd, setShowPwd] = useState(false);
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm();
 
@@ -57,8 +61,17 @@ export default function UsersPage() {
 
   const resetPassword = useMutation({
     mutationFn: ({ id, newPassword }) => api.patch(`/users/${id}/reset-password`, { newPassword }),
-    onSuccess: () => toast.success('Contraseña restablecida')
+    onSuccess: () => {
+      toast.success('Contraseña restablecida');
+      setPwdUser(null);
+      setPwdValue('');
+      setPwdConfirm('');
+      setShowPwd(false);
+    },
+    onError: (err) => toast.error(err.response?.data?.error || 'Error al restablecer contraseña')
   });
+
+  const closePwdModal = () => { setPwdUser(null); setPwdValue(''); setPwdConfirm(''); setShowPwd(false); };
 
   const openCreate = () => { setEditUser(null); reset({ role: 'EMPLEADO' }); setShowModal(true); };
   const openEdit = (u) => { setEditUser(u); reset({ name: u.name, role: u.role, branchId: u.branchId, phone: u.phone }); setShowModal(true); };
@@ -107,10 +120,7 @@ export default function UsersPage() {
                   <Edit2 className="w-3 h-3 inline mr-1" /> Editar
                 </button>
                 <button
-                  onClick={() => {
-                    const pwd = prompt('Nueva contraseña (min 6 chars):');
-                    if (pwd && pwd.length >= 6) resetPassword.mutate({ id: u.id, newPassword: pwd });
-                  }}
+                  onClick={() => setPwdUser(u)}
                   className={clsx('p-1.5 rounded-xl transition-colors', isDark ? 'hover:bg-dark-800 text-dark-400' : 'hover:bg-gray-100 text-gray-400')}
                   title="Resetear contraseña"
                 >
@@ -183,6 +193,73 @@ export default function UsersPage() {
                 </button>
                 <button type="submit" disabled={saveMutation.isPending} className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white bg-primary-500 hover:bg-primary-600 disabled:opacity-60 flex items-center justify-center gap-2">
                   {saveMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : (editUser ? 'Actualizar' : 'Crear')}
+                </button>
+              </div>
+            </form>
+          </motion.div>
+        </motion.div>
+      )}
+
+      {/* Reset password modal */}
+      {pwdUser && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backdropFilter: 'blur(4px)', background: 'rgba(0,0,0,0.5)' }}>
+          <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} className={clsx('w-full max-w-md rounded-2xl border p-6 shadow-2xl', isDark ? 'bg-dark-900 border-dark-800' : 'bg-white border-gray-100')}>
+            <div className="flex items-center gap-3 mb-1">
+              <div className={clsx('w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0 bg-gradient-to-br from-primary-400 to-primary-600')}>
+                {getInitials(pwdUser.name)}
+              </div>
+              <div>
+                <h3 className={clsx('font-bold text-lg', isDark ? 'text-white' : 'text-dark-900')}>Restablecer contraseña</h3>
+                <p className={clsx('text-xs', isDark ? 'text-dark-400' : 'text-gray-500')}>{pwdUser.name} · {pwdUser.email}</p>
+              </div>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (pwdValue.length < 6) { toast.error('La contraseña debe tener al menos 6 caracteres'); return; }
+                if (pwdValue !== pwdConfirm) { toast.error('Las contraseñas no coinciden'); return; }
+                resetPassword.mutate({ id: pwdUser.id, newPassword: pwdValue });
+              }}
+              className="space-y-4 mt-5"
+            >
+              <div>
+                <label className={clsx('block text-xs font-semibold mb-1', isDark ? 'text-dark-300' : 'text-dark-700')}>Nueva contraseña *</label>
+                <div className="relative">
+                  <input
+                    type={showPwd ? 'text' : 'password'}
+                    value={pwdValue}
+                    onChange={(e) => setPwdValue(e.target.value)}
+                    className={clsx(inputClass, 'pr-10')}
+                    placeholder="Mínimo 6 caracteres"
+                    autoFocus
+                  />
+                  <button type="button" onClick={() => setShowPwd(v => !v)} className={clsx('absolute right-3 top-1/2 -translate-y-1/2', isDark ? 'text-dark-400' : 'text-gray-400')}>
+                    {showPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className={clsx('block text-xs font-semibold mb-1', isDark ? 'text-dark-300' : 'text-dark-700')}>Confirmar contraseña *</label>
+                <input
+                  type={showPwd ? 'text' : 'password'}
+                  value={pwdConfirm}
+                  onChange={(e) => setPwdConfirm(e.target.value)}
+                  className={inputClass}
+                  placeholder="Repetir contraseña"
+                />
+                {pwdConfirm && pwdValue !== pwdConfirm && (
+                  <p className="text-xs text-red-500 mt-1">Las contraseñas no coinciden</p>
+                )}
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={closePwdModal} className={clsx('flex-1 py-2.5 rounded-xl text-sm border', isDark ? 'border-dark-700 text-dark-300' : 'border-gray-200 text-gray-600')}>
+                  Cancelar
+                </button>
+                <button type="submit" disabled={resetPassword.isPending} className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white bg-primary-500 hover:bg-primary-600 disabled:opacity-60 flex items-center justify-center gap-2">
+                  {resetPassword.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Restablecer'}
                 </button>
               </div>
             </form>
