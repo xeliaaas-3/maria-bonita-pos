@@ -121,7 +121,7 @@ export default function LabelsPage() {
           {/* Dropdown panel */}
           {showCatalogPanel && (
             <div className={clsx(
-              'absolute right-0 top-full mt-2 w-80 rounded-2xl border shadow-2xl z-30 p-4 space-y-4',
+              'absolute right-0 top-full mt-2 w-[calc(100vw-2rem)] max-w-80 rounded-2xl border shadow-2xl z-30 p-4 space-y-4 max-h-[70vh] overflow-y-auto',
               isDark ? 'bg-dark-900 border-dark-700' : 'bg-white border-gray-100'
             )}>
               <div>
