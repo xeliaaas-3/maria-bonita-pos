@@ -292,11 +292,24 @@ exports.getLabels = async (req, res) => {
       res.send(Buffer.concat(buffers));
     });
 
+    const tr = (str) => String(str || '')
+      .replace(/[áàäâãÁÀÄÂÃ]/g, 'a').replace(/[éèëêÉÈËÊ]/g, 'e')
+      .replace(/[íìïîÍÌÏÎ]/g, 'i').replace(/[óòöôõÓÒÖÔÕ]/g, 'o')
+      .replace(/[úùüûÚÙÜÛ]/g, 'u').replace(/[ñÑ]/g, 'n')
+      .replace(/[^\x00-\x7F]/g, '');
+
     const W_PAGE = 595.28, H_PAGE = 841.89;
-    const COLS = 3, ROWS = 8;
-    const PAD = 10, GAP = 4;
-    const LW = (W_PAGE - PAD * 2 - GAP * (COLS - 1)) / COLS;
-    const LH = (H_PAGE - PAD * 2 - GAP * (ROWS - 1)) / ROWS;
+    // 4 cols x 6 rows — etiquetas más anchas tipo moda
+    const COLS = 4, ROWS = 6;
+    const PAD = 14, GAP = 6;
+    const LW = (W_PAGE - PAD * 2 - GAP * (COLS - 1)) / COLS;  // ~130pt
+    const LH = (H_PAGE - PAD * 2 - GAP * (ROWS - 1)) / ROWS;  // ~132pt
+
+    // paleta editorial
+    const L_BLACK  = '#0d0d0d';
+    const L_GOLD   = '#c9a84c';
+    const L_GRAY   = '#6b7280';
+    const L_LGRAY  = '#f5f5f5';
 
     let col = 0, row = 0;
 
@@ -305,23 +318,58 @@ exports.getLabels = async (req, res) => {
       const x = PAD + col * (LW + GAP);
       const y = PAD + row * (LH + GAP);
 
-      // border
-      doc.rect(x, y, LW, LH).lineWidth(0.5).strokeColor('#d1d5db').stroke();
-      // company mini
-      doc.fontSize(6).font('Helvetica').fillColor('#9ca3af').text(company, x + 3, y + 3, { width: LW - 6, align: 'center' });
-      // name
-      const name = product.name.slice(0, 28);
-      doc.fontSize(7.5).font('Helvetica-Bold').fillColor('#111827').text(name, x + 3, y + 12, { width: LW - 6, align: 'center' });
-      // variant info
-      const vInfo = [variant?.size, variant?.color].filter(Boolean).join(' / ');
-      if (vInfo) doc.fontSize(7).font('Helvetica').fillColor('#374151').text(vInfo, x + 3, y + 22, { width: LW - 6, align: 'center' });
+      // fondo blanco
+      doc.rect(x, y, LW, LH).fill('#ffffff');
+
+      // borde fino completo
+      doc.rect(x, y, LW, LH).lineWidth(0.4).strokeColor('#e5e7eb').stroke();
+
+      // borde dorado izquierdo
+      doc.rect(x, y, 2.5, LH).fill(L_GOLD);
+
+      // franja superior negra
+      const HEAD_H = 18;
+      doc.rect(x, y, LW, HEAD_H).fill(L_BLACK);
+
+      // nombre de empresa en header
+      doc.fontSize(5.5).font('Helvetica-Bold').fillColor('#ffffff')
+         .text(tr(company).toUpperCase(), x + 6, y + 5, { width: LW - 10, align: 'left', characterSpacing: 1 });
+
+      // categoria / marca en header derecha
+      const brandTxt = tr(product.brand?.name || product.category?.name || '').slice(0, 12).toUpperCase();
+      if (brandTxt) {
+        doc.fontSize(5).font('Helvetica').fillColor(L_GOLD)
+           .text(brandTxt, x + 4, y + 5, { width: LW - 8, align: 'right' });
+      }
+
+      // nombre del producto
+      const name = tr(product.name).slice(0, 26);
+      doc.fontSize(8).font('Helvetica-Bold').fillColor(L_BLACK)
+         .text(name, x + 6, y + HEAD_H + 7, { width: LW - 10, lineBreak: false, ellipsis: true });
+
+      // talle / color
+      const vInfo = [variant?.size, variant?.color].filter(Boolean).map(v => tr(String(v))).join('  /  ');
+      if (vInfo) {
+        doc.fontSize(7).font('Helvetica').fillColor(L_GRAY)
+           .text(vInfo, x + 6, y + HEAD_H + 18, { width: LW - 10, lineBreak: false });
+      }
+
+      // linea separadora
+      const sepY = y + HEAD_H + 30;
+      doc.moveTo(x + 6, sepY).lineTo(x + LW - 6, sepY)
+         .lineWidth(0.3).strokeColor('#e5e7eb').stroke();
+
       // SKU
-      const sku = variant?.sku || product.sku;
-      doc.fontSize(6).fillColor('#6b7280').text(sku, x + 3, vInfo ? y + 31 : y + 22, { width: LW - 6, align: 'center' });
-      // price
-      const price = Number(variant?.price || product.salePrice);
-      doc.fontSize(11).font('Helvetica-Bold').fillColor('#7c3aed')
-         .text(`Gs. ${price.toLocaleString('es-PY')}`, x + 3, y + LH - 14, { width: LW - 6, align: 'center' });
+      const sku = variant?.sku || product.sku || '';
+      doc.fontSize(5.5).font('Helvetica').fillColor(L_GRAY)
+         .text('SKU: ' + tr(String(sku)), x + 6, sepY + 5, { width: LW - 10 });
+
+      // precio — franja dorada inferior
+      const price = Number(variant?.price || product.salePrice || 0);
+      const priceH = 22;
+      doc.rect(x, y + LH - priceH, LW, priceH).fill(L_GOLD);
+      doc.fontSize(10.5).font('Helvetica-Bold').fillColor('#ffffff')
+         .text('Gs. ' + price.toLocaleString('es-PY'), x + 4, y + LH - priceH + 6, { width: LW - 8, align: 'center' });
 
       col++;
       if (col >= COLS) { col = 0; row++; }
