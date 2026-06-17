@@ -61,9 +61,6 @@ export default function LabelsPage() {
 
   const generateCatalog = async (withPrice = true, layout = 'grid') => {
     setPrinting(true);
-    // Abrir ventana en el mismo tap (antes del await) para evitar bloqueo en móvil
-    const win = window.open('', '_blank');
-    if (win) win.document.write('<p style="font-family:sans-serif;padding:20px">Generando catálogo...</p>');
     try {
       const catParam = selectedCats.length > 0 ? `&categories=${selectedCats.join(',')}` : '';
       const response = await api.get(
@@ -72,19 +69,16 @@ export default function LabelsPage() {
       );
       const blob = new Blob([response.data], { type: 'application/pdf' });
       const url = URL.createObjectURL(blob);
-      if (win) {
-        win.location.href = url;
-      } else {
-        // fallback: descarga directa
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `catalogo-${layout}.pdf`;
-        a.click();
-      }
+      // Descarga directa (funciona en mobile y desktop sin popup blocker)
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `catalogo-${layout}-${withPrice ? 'con-precio' : 'sin-precio'}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(url), 60000);
       setShowCatalogPanel(false);
     } catch {
-      if (win) win.close();
       toast.error('Error al generar catálogo');
     } finally {
       setPrinting(false);

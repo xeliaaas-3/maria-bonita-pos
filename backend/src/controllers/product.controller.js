@@ -428,20 +428,20 @@ exports.getCatalog = async (req, res) => {
     const INNER   = PAGE_W - ML - MR;
 
     const COLS    = 3;
-    const GAP     = 10;
-    const CARD_W  = (INNER - GAP * (COLS - 1)) / COLS;  // ~163
-    const IMG_H   = CARD_W;                               // square image
-    const INFO_H  = showPrice ? 72 : 60;
+    const GAP     = 8;
+    const CARD_W  = (INNER - GAP * (COLS - 1)) / COLS;  // ~176
+    const IMG_H   = Math.round(CARD_W * 0.75);           // 4:3 ratio
+    const INFO_H  = showPrice ? 58 : 44;
     const CARD_H  = IMG_H + INFO_H;
 
-    // colours
+    // colours — editorial fashion palette
     const C_BG     = '#ffffff';
-    const C_BLACK  = '#111827';
-    const C_DGRAY  = '#374151';
+    const C_BLACK  = '#0d0d0d';
+    const C_DGRAY  = '#1f1f1f';
     const C_MGRAY  = '#6b7280';
     const C_LGRAY  = '#e5e7eb';
-    const C_XLGRAY = '#f3f4f6';
-    const C_ACCENT = '#7c3aed';
+    const C_XLGRAY = '#f5f5f5';
+    const C_ACCENT = '#c9a84c'; // gold fashion accent
     const C_COVER  = '#0f0f1a';
 
     const doc = new PDFDocument({ size: 'A4', margin: 0, autoFirstPage: true, bufferPages: true });
@@ -725,128 +725,71 @@ exports.getCatalog = async (req, res) => {
         const cardX = ML + col * (CARD_W + GAP);
         const cardY = rowStartY;
 
-        // ── CARD ──────────────────────────────────────────────
+        // ── CARD (diseño editorial moda) ────────────────────────
 
-        // card shadow (offset rect)
-        doc.rect(cardX + 2, cardY + 2, CARD_W, CARD_H)
-           .fill('#00000010');
+        // fondo blanco limpio
+        doc.rect(cardX, cardY, CARD_W, CARD_H).fill(C_BG);
 
-        // card background
-        doc.rect(cardX, cardY, CARD_W, CARD_H)
-           .lineWidth(0.5).strokeColor(C_LGRAY).fillAndStroke(C_BG, C_LGRAY);
-
-        // ── IMAGE AREA ──
+        // ── IMAGEN 4:3 (solo imagen principal) ──
         const imgX = cardX;
         const imgY = cardY;
-
-        // image placeholder background
         doc.rect(imgX, imgY, CARD_W, IMG_H).fill(C_XLGRAY);
 
-        // try to embed images — main photo + small strip with extra angles (frente/espalda/costado)
-        const productImages = (product.images || []).filter(Boolean);
-        const imgUrl = productImages[0];
-        const extraImgs = productImages.slice(1, 4); // up to 3 extra angles
-        const THUMB_H = extraImgs.length ? 26 : 0;
-        const MAIN_H  = IMG_H - THUMB_H;
-
-        if (imgUrl) {
-          const imgBuf = await fetchImageBuffer(imgUrl);
+        const mainImgUrl = (product.images || []).filter(Boolean)[0];
+        if (mainImgUrl) {
+          const imgBuf = await fetchImageBuffer(mainImgUrl);
           if (imgBuf) {
             try {
-              // clip to main image area
               doc.save();
-              doc.rect(imgX, imgY, CARD_W, MAIN_H).clip();
-              doc.image(imgBuf, imgX, imgY, { width: CARD_W, height: MAIN_H, cover: [CARD_W, MAIN_H], align: 'center', valign: 'center' });
+              doc.rect(imgX, imgY, CARD_W, IMG_H).clip();
+              doc.image(imgBuf, imgX, imgY, { width: CARD_W, height: IMG_H, cover: [CARD_W, IMG_H], align: 'center', valign: 'center' });
               doc.restore();
             } catch { /* keep placeholder */ }
           }
-        }
-
-        // thumbnail strip with additional angles (front/back/side)
-        if (extraImgs.length) {
-          const thumbY = imgY + MAIN_H + 1;
-          const thumbGap = 1;
-          const thumbW = (CARD_W - thumbGap * (extraImgs.length - 1)) / extraImgs.length;
-          for (let ti = 0; ti < extraImgs.length; ti++) {
-            const thumbX = imgX + ti * (thumbW + thumbGap);
-            doc.rect(thumbX, thumbY, thumbW, THUMB_H - 1).fill(C_XLGRAY);
-            const thumbBuf = await fetchImageBuffer(extraImgs[ti]);
-            if (thumbBuf) {
-              try {
-                doc.save();
-                doc.rect(thumbX, thumbY, thumbW, THUMB_H - 1).clip();
-                doc.image(thumbBuf, thumbX, thumbY, { width: thumbW, height: THUMB_H - 1, cover: [thumbW, THUMB_H - 1], align: 'center', valign: 'center' });
-                doc.restore();
-              } catch { /* keep placeholder */ }
-            }
-          }
-        }
-
-        // image area border overlay
-        doc.rect(imgX, imgY, CARD_W, IMG_H)
-           .lineWidth(0).strokeColor(C_LGRAY).stroke();
-
-        // accent top bar on image
-        doc.rect(imgX, imgY, CARD_W, 3).fill(C_ACCENT);
-
-        // category badge (top-right)
-        if (product.brand?.name) {
-          const badgeTxt = tr(product.brand.name).slice(0, 14);
-          const bW = Math.min(doc.widthOfString(badgeTxt, { size: 6 }) + 10, 60);
-          doc.rect(imgX + CARD_W - bW - 4, imgY + 7, bW, 13)
-             .fill('#1a1a2e').opacity(0.75);
-          doc.fontSize(6).font('Helvetica-Bold').fillColor('#ffffff')
-             .text(badgeTxt, imgX + CARD_W - bW - 1, imgY + 10, { width: bW - 2, align: 'center' });
-        }
-
-        // No-image placeholder icon text
-        if (!imgUrl || !product.images?.[0]) {
-          doc.fontSize(22).fillColor('#d1d5db')
-             .text('', imgX, imgY + IMG_H / 2 - 18, { width: CARD_W, align: 'center' });
+        } else {
           doc.fontSize(7).font('Helvetica').fillColor('#9ca3af')
-             .text('Sin imagen', imgX, imgY + IMG_H / 2 + 8, { width: CARD_W, align: 'center' });
+             .text('Sin imagen', imgX, imgY + IMG_H / 2 - 4, { width: CARD_W, align: 'center' });
         }
+
+        // franja negra semitransparente abajo de la imagen (categoria)
+        if (product.category?.name) {
+          doc.rect(imgX, imgY + IMG_H - 14, CARD_W, 14).fill('#00000088');
+          doc.fontSize(6).font('Helvetica').fillColor('#ffffff')
+             .text(tr(product.category.name).toUpperCase(), imgX + 4, imgY + IMG_H - 10, { width: CARD_W - 8, align: 'left', characterSpacing: 0.8 });
+        }
+
+        // linea dorada inferior de imagen
+        doc.rect(imgX, imgY + IMG_H - 2, CARD_W, 2).fill(C_ACCENT);
 
         // ── INFO AREA ──
-        const infoX  = cardX + 7;
-        const infoW  = CARD_W - 14;
-        let   infoY  = cardY + IMG_H + 8;
+        const infoX = cardX + 6;
+        const infoW = CARD_W - 12;
+        let   infoY = cardY + IMG_H + 7;
 
-        // product name — transliterate accented chars for PDFKit
-        const safeName = tr(product.name).slice(0, 36) || tr(product.name.replace(/./g, '?')).slice(0,36);
-        doc.fontSize(8).font('Helvetica-Bold').fillColor(C_BLACK)
+        // nombre producto
+        const safeName = tr(product.name).slice(0, 34);
+        doc.fontSize(7.5).font('Helvetica-Bold').fillColor(C_BLACK)
            .text(safeName, infoX, infoY, { width: infoW, lineBreak: false, ellipsis: true });
-        infoY += 13;
+        infoY += 11;
 
-        // sizes & colors
+        // talles
         const sizes  = [...new Set(product.variants.map(v => v.size).filter(Boolean))];
-        const colors = [...new Set(product.variants.map(v => v.color).filter(Boolean))];
-
-        if (sizes.length || colors.length) {
-          const safeArr = (arr) => arr.map(v => tr(String(v)));
-          const detail = [
-            sizes.length  ? 'Talles: ' + safeArr(sizes).slice(0, 5).join(' ')   : null,
-            colors.length ? 'Colores: ' + safeArr(colors).slice(0, 4).join(', ') : null,
-          ].filter(Boolean).join('  -  ');
-          doc.fontSize(6.5).font('Helvetica').fillColor(C_MGRAY)
-             .text(detail, infoX, infoY, { width: infoW, lineBreak: false, ellipsis: true });
-          infoY += 11;
+        if (sizes.length) {
+          doc.fontSize(6).font('Helvetica').fillColor(C_MGRAY)
+             .text(sizes.map(v => tr(String(v))).slice(0, 6).join('  '), infoX, infoY, { width: infoW, lineBreak: false, ellipsis: true });
+          infoY += 9;
         }
 
-        // SKU
-        doc.fontSize(6).fillColor('#9ca3af')
-           .text('SKU: ' + tr(String(product.sku || '')), infoX, infoY, { width: infoW });
-        infoY += 9;
-
-        // price block
+        // precio — dentro de la tarjeta, fondo dorado
         if (showPrice) {
-          doc.rect(cardX, cardY + CARD_H - 22, CARD_W, 22).fill(C_ACCENT);
-          doc.fontSize(11).font('Helvetica-Bold').fillColor('#ffffff')
-             .text('Gs. ' + fmt(product.salePrice), infoX - 2, cardY + CARD_H - 15, { width: CARD_W - 4, align: 'center' });
-        } else {
-          // thin accent bottom line instead
-          doc.rect(cardX, cardY + CARD_H - 3, CARD_W, 3).fill(C_ACCENT);
+          const priceY = cardY + CARD_H - 20;
+          doc.rect(cardX, priceY, CARD_W, 20).fill(C_ACCENT);
+          doc.fontSize(10).font('Helvetica-Bold').fillColor('#ffffff')
+             .text('Gs. ' + fmt(product.salePrice), infoX - 2, priceY + 5, { width: CARD_W - 4, align: 'center' });
         }
+
+        // borde fino lateral izquierdo dorado
+        doc.rect(cardX, cardY, 2, CARD_H).fill(C_ACCENT);
 
         col++;
         if (col >= COLS) {
