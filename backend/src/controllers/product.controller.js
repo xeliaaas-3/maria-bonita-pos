@@ -478,8 +478,8 @@ exports.getCatalog = async (req, res) => {
     const COLS    = 3;
     const GAP     = 8;
     const CARD_W  = (INNER - GAP * (COLS - 1)) / COLS;  // ~176
-    const IMG_H   = Math.round(CARD_W * 0.75);           // 4:3 ratio
-    const INFO_H  = showPrice ? 58 : 44;
+    const IMG_H   = Math.round(CARD_W * (4 / 3));        // 3:4 portrait (vertical, ideal para ropa)
+    const INFO_H  = showPrice ? 52 : 38;
     const CARD_H  = IMG_H + INFO_H;
 
     // colours — editorial fashion palette
