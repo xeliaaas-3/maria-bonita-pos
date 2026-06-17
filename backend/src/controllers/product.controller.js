@@ -475,22 +475,26 @@ exports.getCatalog = async (req, res) => {
     const MT      = 28;
     const INNER   = PAGE_W - ML - MR;
 
-    const COLS    = 3;
-    const GAP     = 8;
-    const CARD_W  = (INNER - GAP * (COLS - 1)) / COLS;  // ~176
-    const IMG_H   = Math.round(CARD_W * (4 / 3));        // 3:4 portrait (vertical, ideal para ropa)
-    const INFO_H  = showPrice ? 52 : 38;
+    // ── Grey & White Modern Fashion — 2 columnas amplias ──────
+    const COLS    = 2;
+    const GAP     = 20;
+    const PAD_PAGE = 36;
+    const INNER_W  = PAGE_W - PAD_PAGE * 2;
+    const CARD_W  = (INNER_W - GAP) / 2;          // ~238pt
+    const IMG_H   = Math.round(CARD_W * (4 / 3)); // 3:4 portrait ~317pt
+    const INFO_H  = showPrice ? 80 : 64;
     const CARD_H  = IMG_H + INFO_H;
 
-    // colours — editorial fashion palette
+    // colours — Grey & White Modern palette
     const C_BG     = '#ffffff';
-    const C_BLACK  = '#0d0d0d';
-    const C_DGRAY  = '#1f1f1f';
-    const C_MGRAY  = '#6b7280';
-    const C_LGRAY  = '#e5e7eb';
-    const C_XLGRAY = '#f5f5f5';
-    const C_ACCENT = '#c9a84c'; // gold fashion accent
-    const C_COVER  = '#0f0f1a';
+    const C_PAGE   = '#f4f4f4';  // fondo gris claro de pagina
+    const C_BLACK  = '#1a1a1a';
+    const C_DGRAY  = '#333333';
+    const C_MGRAY  = '#888888';
+    const C_LGRAY  = '#cccccc';
+    const C_XLGRAY = '#eeeeee';
+    const C_ACCENT = '#c9a84c'; // dorado marca Maria Bonita
+    const C_COVER  = '#1a1a1a'; // casi negro para portada
 
     const doc = new PDFDocument({ size: 'A4', margin: 0, autoFirstPage: true, bufferPages: true });
     const buffers = [];
@@ -735,29 +739,32 @@ exports.getCatalog = async (req, res) => {
     const categories = Object.keys(grouped).sort();
 
     const drawPageHeader = (catLabel) => {
-      // header compacto negro con logo/empresa + categoria
-      doc.rect(0, 0, PAGE_W, 48).fill(C_BLACK);
-      doc.rect(0, 0, 5, 48).fill(C_ACCENT);
-      doc.rect(5, 44, PAGE_W - 5, 4).fill(C_ACCENT);
-      // empresa
-      doc.fontSize(13).font('Helvetica-Bold').fillColor('#ffffff')
-         .text(tr(COMPANY).toUpperCase(), ML + 6, 9, { width: INNER * 0.55, characterSpacing: 2 });
+      // fondo gris claro de pagina
+      doc.rect(0, 0, PAGE_W, PAGE_H).fill(C_PAGE);
+      // header minimalista blanco
+      doc.rect(0, 0, PAGE_W, 52).fill(C_BG);
+      // linea dorada inferior del header
+      doc.rect(0, 50, PAGE_W, 2).fill(C_ACCENT);
+      // empresa — izquierda, pequeño, uppercase
+      doc.fontSize(8).font('Helvetica-Bold').fillColor(C_MGRAY)
+         .text(tr(COMPANY).toUpperCase(), PAD_PAGE, 16, { width: INNER_W * 0.5, characterSpacing: 2 });
+      // nombre catalogo — grande, negro
+      doc.fontSize(11).font('Helvetica-Bold').fillColor(C_BLACK)
+         .text(tr(COMPANY).toUpperCase(), PAD_PAGE, 28, { width: INNER_W * 0.5, characterSpacing: 1 });
       // categoria derecha
-      doc.fontSize(7).font('Helvetica').fillColor(C_ACCENT)
-         .text(tr(catLabel).toUpperCase(), ML, 14, { width: INNER - 6, align: 'right', characterSpacing: 1.5 });
-      // tagline
-      doc.fontSize(7).font('Helvetica').fillColor('#6b7280')
-         .text(subtitle + '  •  ' + tr(dateStr).toUpperCase(), ML + 6, 30, { width: INNER });
-      return 56;
+      doc.fontSize(7).font('Helvetica').fillColor(C_MGRAY)
+         .text(tr(catLabel).toUpperCase(), PAD_PAGE, 21, { width: INNER_W, align: 'right', characterSpacing: 1.5 });
+      return 64;
     };
 
     const drawPageFooter = (pageNum) => {
-      doc.rect(0, PAGE_H - 28, PAGE_W, 28).fill(C_BLACK);
-      doc.rect(0, PAGE_H - 28, 5, 28).fill(C_ACCENT);
-      doc.fontSize(7).font('Helvetica').fillColor('#6b7280')
-         .text(tr(COMPANY) + '  •  ' + (PHONE ? 'WhatsApp: ' + PHONE : '') + '  •  ' + tr(ADDRESS), ML + 6, PAGE_H - 20, { width: INNER * 0.75, lineBreak: false, ellipsis: true });
+      // footer minimalista blanco
+      doc.rect(0, PAGE_H - 30, PAGE_W, 30).fill(C_BG);
+      doc.rect(0, PAGE_H - 30, PAGE_W, 1).fill(C_LGRAY);
+      doc.fontSize(7).font('Helvetica').fillColor(C_MGRAY)
+         .text(tr(COMPANY) + '  ·  ' + (PHONE || '') + '  ·  ' + tr(ADDRESS), PAD_PAGE, PAGE_H - 18, { width: INNER_W * 0.75, lineBreak: false, ellipsis: true });
       doc.fontSize(7).fillColor(C_ACCENT)
-         .text(String(pageNum), ML, PAGE_H - 20, { width: INNER - 6, align: 'right' });
+         .text(String(pageNum), PAD_PAGE, PAGE_H - 18, { width: INNER_W, align: 'right' });
     };
 
     let globalPageNum = 1;
@@ -804,7 +811,7 @@ exports.getCatalog = async (req, res) => {
           firstOnPage = false;
         }
 
-        const cardX = ML + col * (CARD_W + GAP);
+        const cardX = PAD_PAGE + col * (CARD_W + GAP);
         const cardY = rowStartY;
 
         // ── CARD (editorial moda premium) ──────────────────────
