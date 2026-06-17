@@ -502,50 +502,85 @@ exports.getCatalog = async (req, res) => {
       res.send(Buffer.concat(buffers));
     });
 
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('es-PY', { month: 'long', year: 'numeric' });
+    const subtitle = showPrice ? 'CATALOGO DE PRODUCTOS Y PRECIOS' : 'CATALOGO DE COLECCION';
+
+    // QR de WhatsApp (generado una sola vez, reutilizado en portada y pagina de contacto)
+    let qrBuf = null;
+    try {
+      const QRCode = require('qrcode');
+      const waPhone = (PHONE || '').replace(/\D/g, '');
+      if (waPhone) qrBuf = await QRCode.toBuffer(`https://wa.me/${waPhone}`, { width: 180, margin: 1, color: { dark: '#0d0d0d', light: '#fafaf8' } });
+    } catch { /* qr opcional */ }
+
+    // Logo desde assets (si existe)
+    let logoBuf = null;
+    try {
+      const fs = require('fs'), path = require('path');
+      const lp = path.join(__dirname, '../assets/logo.png');
+      if (fs.existsSync(lp)) logoBuf = fs.readFileSync(lp);
+    } catch { /* opcional */ }
+
     // ══════════════════════════════════════════════════════════
-    // PORTADA
+    // PORTADA — editorial premium
     // ══════════════════════════════════════════════════════════
     doc.rect(0, 0, PAGE_W, PAGE_H).fill(C_COVER);
 
-    // accent bar top
-    doc.rect(0, 0, PAGE_W, 6).fill(C_ACCENT);
+    // barras doradas top y bottom
+    doc.rect(0, 0, PAGE_W, 8).fill(C_ACCENT);
+    doc.rect(0, PAGE_H - 8, PAGE_W, 8).fill(C_ACCENT);
 
-    // large company name
-    doc.fontSize(42).font('Helvetica-Bold').fillColor('#ffffff')
-       .text(COMPANY.toUpperCase(), ML, 200, { width: INNER, align: 'center', characterSpacing: 4 });
+    // franja lateral izquierda dorada
+    doc.rect(0, 8, 5, PAGE_H - 16).fill(C_ACCENT);
 
-    // divider line
-    const divY = 270;
-    doc.moveTo(ML + 40, divY).lineTo(PAGE_W - MR - 40, divY)
-       .lineWidth(1).strokeColor(C_ACCENT).stroke();
+    // logo o nombre empresa — zona superior centrada
+    if (logoBuf) {
+      try {
+        doc.image(logoBuf, PAGE_W / 2 - 55, 110, { width: 110, height: 110, fit: [110, 110], align: 'center' });
+      } catch { logoBuf = null; }
+    }
+    const nameY = logoBuf ? 238 : 200;
+    doc.fontSize(44).font('Helvetica-Bold').fillColor('#ffffff')
+       .text(tr(COMPANY).toUpperCase(), ML + 8, nameY, { width: INNER, align: 'center', characterSpacing: 5 });
 
-    // subtitle
-    const subtitle = showPrice ? 'CATALOGO DE PRODUCTOS Y PRECIOS' : 'CATALOGO DE COLECCION';
-    doc.fontSize(11).font('Helvetica').fillColor('#9ca3af')
-       .text(subtitle, ML, divY + 14, { width: INNER, align: 'center', characterSpacing: 2 });
+    // linea dorada decorativa
+    const divY = nameY + 60;
+    doc.moveTo(ML + 60, divY).lineTo(PAGE_W - MR - 60, divY).lineWidth(1.5).strokeColor(C_ACCENT).stroke();
 
-    // date
-    const now = new Date();
-    const dateStr = now.toLocaleDateString('es-PY', { month: 'long', year: 'numeric' });
-    doc.fontSize(9).fillColor('#6b7280')
-       .text(dateStr.toUpperCase(), ML, divY + 36, { width: INNER, align: 'center', characterSpacing: 1 });
+    // subtitle + date
+    doc.fontSize(10).font('Helvetica').fillColor(C_ACCENT)
+       .text(subtitle, ML, divY + 14, { width: INNER, align: 'center', characterSpacing: 3 });
+    doc.fontSize(9).fillColor('#9ca3af')
+       .text(tr(dateStr).toUpperCase(), ML, divY + 32, { width: INNER, align: 'center', characterSpacing: 2 });
 
-    // contact info block
-    const contactLines = [ADDRESS, PHONE && `Tel: ${PHONE}`, EMAIL].filter(Boolean);
-    const contactY = PAGE_H - 120;
-    doc.moveTo(ML + 40, contactY - 10).lineTo(PAGE_W - MR - 40, contactY - 10)
-       .lineWidth(0.5).strokeColor('#374151').stroke();
-    contactLines.forEach((line, i) => {
-      doc.fontSize(8.5).font('Helvetica').fillColor('#9ca3af')
-         .text(line, ML, contactY + i * 14, { width: INNER, align: 'center' });
-    });
-
-    // products count
+    // contador de productos
     doc.fontSize(8).fillColor('#4b5563')
-       .text(products.length + ' productos disponibles', ML, PAGE_H - 40, { width: INNER, align: 'center' });
+       .text(products.length + ' productos en este catalogo', ML, divY + 50, { width: INNER, align: 'center' });
 
-    // accent bar bottom
-    doc.rect(0, PAGE_H - 6, PAGE_W, 6).fill(C_ACCENT);
+    // ── bloque inferior: QR + contacto ──
+    const footBlockY = PAGE_H - 180;
+    doc.moveTo(ML + 40, footBlockY).lineTo(PAGE_W - MR - 40, footBlockY).lineWidth(0.5).strokeColor('#374151').stroke();
+
+    // QR en portada (pequeño, esquina derecha)
+    if (qrBuf) {
+      try {
+        doc.image(qrBuf, PAGE_W - MR - 80, footBlockY + 12, { width: 72, height: 72 });
+        doc.fontSize(6).fillColor('#9ca3af')
+           .text('Escanea para\nWhatsApp', PAGE_W - MR - 80, footBlockY + 86, { width: 72, align: 'center' });
+      } catch { /* opcional */ }
+    }
+
+    // datos de contacto
+    const contactLines = [tr(ADDRESS), PHONE && ('WhatsApp: ' + PHONE), EMAIL].filter(Boolean);
+    doc.fontSize(8).font('Helvetica-Bold').fillColor(C_ACCENT)
+       .text('CONTACTO', ML + 8, footBlockY + 14, { width: INNER * 0.55 });
+    contactLines.forEach((line, i) => {
+      doc.fontSize(8).font('Helvetica').fillColor('#9ca3af')
+         .text(tr(line), ML + 8, footBlockY + 28 + i * 14, { width: INNER * 0.55 });
+    });
+    doc.fontSize(7.5).font('Helvetica').fillColor('#6b7280')
+       .text('Envios a todo Paraguay  •  Cambios en 7 dias', ML + 8, footBlockY + 28 + contactLines.length * 14 + 6, { width: INNER * 0.55 });
 
     // ══════════════════════════════════════════════════════════
     // POSTER LAYOUT — dos fichas por hoja (media pagina cada una)
@@ -560,8 +595,9 @@ exports.getCatalog = async (req, res) => {
         const innerH = HALF_H;
 
         // card background + accent border
-        doc.rect(GAP, baseY, innerW, innerH).fill('#eef0fa');
+        doc.rect(GAP, baseY, innerW, innerH).fill('#ffffff');
         doc.rect(GAP, baseY, innerW, 5).fill(C_ACCENT);
+        doc.rect(GAP, baseY, 3, innerH).fill(C_ACCENT);
 
         // ── header: marca/empresa + categoria ──
         doc.fontSize(9).font('Helvetica-Bold').fillColor(C_BLACK)
@@ -645,114 +681,113 @@ exports.getCatalog = async (req, res) => {
 
       for (let pi = 0; pi < products.length; pi += 2) {
         doc.addPage();
-        doc.rect(0, 0, PAGE_W, PAGE_H).fill(C_BG);
-        await drawCard(products[pi], GAP);
+        doc.rect(0, 0, PAGE_W, PAGE_H).fill('#fafaf8');
+        // header compacto en cada hoja
+        doc.rect(0, 0, PAGE_W, 6).fill(C_ACCENT);
+        doc.rect(0, PAGE_H - 22, PAGE_W, 22).fill(C_BLACK);
+        doc.fontSize(7).font('Helvetica').fillColor('#6b7280')
+           .text(tr(COMPANY) + '  •  ' + (PHONE ? 'WhatsApp: ' + PHONE : '') + '  •  ' + tr(ADDRESS), ML, PAGE_H - 14, { width: INNER * 0.78, lineBreak: false, ellipsis: true });
+        doc.fontSize(7).fillColor(C_ACCENT)
+           .text(String(Math.floor(pi / 2) + 1), ML, PAGE_H - 14, { width: INNER - 6, align: 'right' });
+
+        await drawCard(products[pi], 6 + GAP);
         if (products[pi + 1]) {
-          await drawCard(products[pi + 1], GAP + HALF_H + 2 * GAP);
+          await drawCard(products[pi + 1], 6 + GAP + HALF_H + GAP);
         }
       }
+
+      // pagina de contacto final (poster tambien)
+      doc.addPage();
+      doc.rect(0, 0, PAGE_W, PAGE_H).fill(C_COVER);
+      doc.rect(0, 0, PAGE_W, 8).fill(C_ACCENT);
+      doc.rect(0, PAGE_H - 8, PAGE_W, 8).fill(C_ACCENT);
+      doc.rect(0, 8, 5, PAGE_H - 16).fill(C_ACCENT);
+      if (logoBuf) { try { doc.image(logoBuf, PAGE_W / 2 - 45, 80, { width: 90, height: 90, fit: [90, 90] }); } catch {} }
+      const pctY = logoBuf ? 190 : 170;
+      doc.fontSize(30).font('Helvetica-Bold').fillColor('#ffffff')
+         .text(tr(COMPANY).toUpperCase(), ML, pctY, { width: INNER, align: 'center', characterSpacing: 4 });
+      doc.moveTo(ML + 80, pctY + 44).lineTo(PAGE_W - MR - 80, pctY + 44).lineWidth(1).strokeColor(C_ACCENT).stroke();
+      doc.fontSize(9).font('Helvetica').fillColor(C_ACCENT)
+         .text('PARA HACER TU PEDIDO', ML, pctY + 58, { width: INNER, align: 'center', characterSpacing: 2 });
+      if (qrBuf) {
+        try {
+          const qs = 130;
+          doc.image(qrBuf, PAGE_W / 2 - qs / 2, pctY + 80, { width: qs, height: qs });
+          doc.rect(PAGE_W / 2 - qs / 2 - 4, pctY + 76, qs + 8, qs + 8).lineWidth(1.5).strokeColor(C_ACCENT).stroke();
+        } catch {}
+      }
+      doc.fontSize(13).font('Helvetica-Bold').fillColor('#ffffff').text(PHONE || '', ML, pctY + 234, { width: INNER, align: 'center' });
+      [tr(ADDRESS), EMAIL, 'Envios a todo Paraguay', 'Cambios en 7 dias'].filter(Boolean).forEach((line, i) => {
+        doc.fontSize(8).font('Helvetica').fillColor('#9ca3af').text(tr(line), ML, pctY + 256 + i * 14, { width: INNER, align: 'center' });
+      });
 
       doc.end();
       return;
     }
 
-    // ══════════════════════════════════════════════════════════
-    // INDEX PAGE (categories)
-    // ══════════════════════════════════════════════════════════
-    doc.addPage();
-
-    // page header
-    doc.rect(0, 0, PAGE_W, 52).fill(C_BLACK);
-    doc.rect(0, 0, 4, 52).fill(C_ACCENT);
-    doc.fontSize(16).font('Helvetica-Bold').fillColor('#ffffff')
-       .text(COMPANY, ML + 8, 14, { width: INNER });
-    doc.fontSize(8).font('Helvetica').fillColor('#9ca3af')
-       .text(subtitle, ML + 8, 34, { width: INNER });
-
-    let pageY = 72;
-
-    // grouped by category
+    // grouped by category (sin index ni separador — directo a productos)
     const grouped = {};
     for (const p of products) {
-      const cat = p.category?.name || 'Sin categoría';
+      const cat = p.category?.name || 'Sin categoria';
       if (!grouped[cat]) grouped[cat] = [];
       grouped[cat].push(p);
     }
-
     const categories = Object.keys(grouped).sort();
 
-    // ── Category index ──
-    doc.fontSize(11).font('Helvetica-Bold').fillColor(C_BLACK)
-       .text('INDICE DE CATEGORIAS', ML, pageY);
-    doc.moveTo(ML, pageY + 16).lineTo(PAGE_W - MR, pageY + 16)
-       .lineWidth(0.5).strokeColor(C_LGRAY).stroke();
-    pageY += 24;
+    const drawPageHeader = (catLabel) => {
+      // header compacto negro con logo/empresa + categoria
+      doc.rect(0, 0, PAGE_W, 48).fill(C_BLACK);
+      doc.rect(0, 0, 5, 48).fill(C_ACCENT);
+      doc.rect(5, 44, PAGE_W - 5, 4).fill(C_ACCENT);
+      // empresa
+      doc.fontSize(13).font('Helvetica-Bold').fillColor('#ffffff')
+         .text(tr(COMPANY).toUpperCase(), ML + 6, 9, { width: INNER * 0.55, characterSpacing: 2 });
+      // categoria derecha
+      doc.fontSize(7).font('Helvetica').fillColor(C_ACCENT)
+         .text(tr(catLabel).toUpperCase(), ML, 14, { width: INNER - 6, align: 'right', characterSpacing: 1.5 });
+      // tagline
+      doc.fontSize(7).font('Helvetica').fillColor('#6b7280')
+         .text(subtitle + '  •  ' + tr(dateStr).toUpperCase(), ML + 6, 30, { width: INNER });
+      return 56;
+    };
 
-    categories.forEach((cat, i) => {
-      const count = grouped[cat].length;
-      const rowH = 22;
-      if (i % 2 === 0) {
-        doc.rect(ML, pageY - 2, INNER, rowH).fill(C_XLGRAY);
-      }
-      doc.fontSize(9).font('Helvetica-Bold').fillColor(C_BLACK)
-         .text(tr(cat), ML + 6, pageY + 4, { width: INNER * 0.7 });
-      doc.fontSize(9).font('Helvetica').fillColor(C_MGRAY)
-         .text(count + ' producto' + (count !== 1 ? 's' : ''), ML + 6, pageY + 4, { width: INNER - 12, align: 'right' });
-      pageY += rowH;
-    });
+    const drawPageFooter = (pageNum) => {
+      doc.rect(0, PAGE_H - 28, PAGE_W, 28).fill(C_BLACK);
+      doc.rect(0, PAGE_H - 28, 5, 28).fill(C_ACCENT);
+      doc.fontSize(7).font('Helvetica').fillColor('#6b7280')
+         .text(tr(COMPANY) + '  •  ' + (PHONE ? 'WhatsApp: ' + PHONE : '') + '  •  ' + tr(ADDRESS), ML + 6, PAGE_H - 20, { width: INNER * 0.75, lineBreak: false, ellipsis: true });
+      doc.fontSize(7).fillColor(C_ACCENT)
+         .text(String(pageNum), ML, PAGE_H - 20, { width: INNER - 6, align: 'right' });
+    };
 
-    // ══════════════════════════════════════════════════════════
-    // PRODUCT PAGES — one section per category
-    // ══════════════════════════════════════════════════════════
+    let globalPageNum = 1;
+    let pageY = 0;
+    let col = 0;
+    let rowStartY = 0;
+    let firstOnPage = true;
+    let currentCat = '';
+
+    // primera pagina de productos
+    doc.addPage();
+    pageY = drawPageHeader(categories[0] || '');
+    currentCat = categories[0] || '';
+    firstOnPage = true;
+    col = 0;
 
     for (const cat of categories) {
       const catProducts = grouped[cat];
 
-      // category section header page
-      doc.addPage();
-      doc.rect(0, 0, PAGE_W, PAGE_H).fill(C_XLGRAY);
-      doc.rect(0, 0, PAGE_W, 6).fill(C_ACCENT);
-      doc.rect(0, PAGE_H - 6, PAGE_W, 6).fill(C_ACCENT);
-
-      // Big category label centred vertically
-      doc.fontSize(32).font('Helvetica-Bold').fillColor(C_BLACK)
-         .text(tr(cat).toUpperCase(), ML, PAGE_H / 2 - 50, { width: INNER, align: 'center' });
-      doc.moveTo(ML + 60, PAGE_H / 2 - 6).lineTo(PAGE_W - MR - 60, PAGE_H / 2 - 6)
-         .lineWidth(1.5).strokeColor(C_ACCENT).stroke();
-      doc.fontSize(10).font('Helvetica').fillColor(C_MGRAY)
-         .text(catProducts.length + ' producto' + (catProducts.length !== 1 ? 's' : ''), ML, PAGE_H / 2 + 10, { width: INNER, align: 'center' });
-
-      // ── product grid pages ──
-      let col = 0;
-      let rowStartY = 0;
-      let firstOnPage = true;
-
-      const drawPageHeader = () => {
-        doc.rect(0, 0, PAGE_W, 44).fill(C_BLACK);
-        doc.rect(0, 0, 4, 44).fill(C_ACCENT);
-        doc.fontSize(12).font('Helvetica-Bold').fillColor('#ffffff')
-           .text(COMPANY, ML + 8, 10, { width: INNER * 0.5 });
-        doc.fontSize(8).font('Helvetica').fillColor('#9ca3af')
-           .text(tr(cat), ML + 8, 28, { width: INNER * 0.5 });
-        doc.fontSize(8).fillColor('#6b7280')
-           .text(subtitle, ML, 28, { width: INNER - 8, align: 'right' });
-        return 56; // return starting Y
-      };
-
-      const drawPageFooter = (pageNum) => {
-        doc.moveTo(ML, PAGE_H - 26).lineTo(PAGE_W - MR, PAGE_H - 26)
-           .lineWidth(0.5).strokeColor(C_LGRAY).stroke();
-        doc.fontSize(7).font('Helvetica').fillColor(C_MGRAY)
-           .text(COMPANY + '  -  ' + subtitle + '  -  ' + dateStr, ML, PAGE_H - 18, { width: INNER - 40 });
-        doc.fontSize(7).fillColor(C_MGRAY)
-           .text(`${pageNum}`, ML, PAGE_H - 18, { width: INNER, align: 'right' });
-      };
-
-      let pageNum = 1;
-      doc.addPage();
-      pageY = drawPageHeader();
-      firstOnPage = true;
-      col = 0;
+      // si cambia de categoria y ya hay contenido, nueva pagina con header de nueva cat
+      if (cat !== currentCat) {
+        if (!firstOnPage) {
+          drawPageFooter(globalPageNum++);
+          doc.addPage();
+          pageY = drawPageHeader(cat);
+          firstOnPage = true;
+          col = 0;
+        }
+        currentCat = cat;
+      }
 
       for (let pi = 0; pi < catProducts.length; pi++) {
         const product = catProducts[pi];
@@ -760,11 +795,10 @@ exports.getCatalog = async (req, res) => {
         // start new row?
         if (col === 0) {
           rowStartY = pageY;
-          // check if row fits
-          if (!firstOnPage && rowStartY + CARD_H > PAGE_H - 35) {
-            drawPageFooter(pageNum++);
+          if (!firstOnPage && rowStartY + CARD_H > PAGE_H - 32) {
+            drawPageFooter(globalPageNum++);
             doc.addPage();
-            pageY = drawPageHeader();
+            pageY = drawPageHeader(cat);
             rowStartY = pageY;
           }
           firstOnPage = false;
@@ -773,12 +807,14 @@ exports.getCatalog = async (req, res) => {
         const cardX = ML + col * (CARD_W + GAP);
         const cardY = rowStartY;
 
-        // ── CARD (diseño editorial moda) ────────────────────────
+        // ── CARD (editorial moda premium) ──────────────────────
 
-        // fondo blanco limpio
-        doc.rect(cardX, cardY, CARD_W, CARD_H).fill(C_BG);
+        // sombra sutil
+        doc.rect(cardX + 2, cardY + 2, CARD_W, CARD_H).fill('#00000018');
+        // fondo blanco calido
+        doc.rect(cardX, cardY, CARD_W, CARD_H).fill('#fafaf8');
 
-        // ── IMAGEN 4:3 (solo imagen principal) ──
+        // ── IMAGEN vertical 3:4 ──
         const imgX = cardX;
         const imgY = cardY;
         doc.rect(imgX, imgY, CARD_W, IMG_H).fill(C_XLGRAY);
@@ -795,49 +831,72 @@ exports.getCatalog = async (req, res) => {
             } catch { /* keep placeholder */ }
           }
         } else {
-          doc.fontSize(7).font('Helvetica').fillColor('#9ca3af')
+          doc.fontSize(7).font('Helvetica').fillColor('#aaaaaa')
              .text('Sin imagen', imgX, imgY + IMG_H / 2 - 4, { width: CARD_W, align: 'center' });
         }
 
-        // franja negra semitransparente abajo de la imagen (categoria)
+        // badge LIQUIDACION
+        if (product.tags?.includes?.('liquidacion')) {
+          doc.rect(imgX + 4, imgY + 6, 38, 12).fill('#dc2626');
+          doc.fontSize(5.5).font('Helvetica-Bold').fillColor('#ffffff')
+             .text('LIQUI', imgX + 4, imgY + 9, { width: 38, align: 'center' });
+        }
+
+        // badge NUEVO (si fue creado en los ultimos 30 dias)
+        const isNew = product.createdAt && (Date.now() - new Date(product.createdAt).getTime()) < 30 * 24 * 3600000;
+        if (isNew && !product.tags?.includes?.('liquidacion')) {
+          doc.rect(imgX + 4, imgY + 6, 32, 12).fill(C_ACCENT);
+          doc.fontSize(5.5).font('Helvetica-Bold').fillColor('#ffffff')
+             .text('NUEVO', imgX + 4, imgY + 9, { width: 32, align: 'center' });
+        }
+
+        // gradiente negro inferior sobre imagen (para legibilidad de categoria)
+        doc.rect(imgX, imgY + IMG_H - 22, CARD_W, 22).fill('#000000cc');
         if (product.category?.name) {
-          doc.rect(imgX, imgY + IMG_H - 14, CARD_W, 14).fill('#00000088');
-          doc.fontSize(6).font('Helvetica').fillColor('#ffffff')
-             .text(tr(product.category.name).toUpperCase(), imgX + 4, imgY + IMG_H - 10, { width: CARD_W - 8, align: 'left', characterSpacing: 0.8 });
+          doc.fontSize(5.5).font('Helvetica').fillColor('#cccccc')
+             .text(tr(product.category.name).toUpperCase(), imgX + 5, imgY + IMG_H - 18, { width: CARD_W - 10, lineBreak: false, characterSpacing: 1 });
         }
 
         // linea dorada inferior de imagen
-        doc.rect(imgX, imgY + IMG_H - 2, CARD_W, 2).fill(C_ACCENT);
+        doc.rect(imgX, imgY + IMG_H, CARD_W, 2).fill(C_ACCENT);
 
         // ── INFO AREA ──
         const infoX = cardX + 6;
         const infoW = CARD_W - 12;
-        let   infoY = cardY + IMG_H + 7;
+        let   infoY = cardY + IMG_H + 8;
 
         // nombre producto
-        const safeName = tr(product.name).slice(0, 34);
+        const safeName = tr(product.name).slice(0, 32);
         doc.fontSize(7.5).font('Helvetica-Bold').fillColor(C_BLACK)
            .text(safeName, infoX, infoY, { width: infoW, lineBreak: false, ellipsis: true });
         infoY += 11;
 
-        // talles
+        // talles + colores en misma linea
         const sizes  = [...new Set(product.variants.map(v => v.size).filter(Boolean))];
-        if (sizes.length) {
-          doc.fontSize(6).font('Helvetica').fillColor(C_MGRAY)
-             .text(sizes.map(v => tr(String(v))).slice(0, 6).join('  '), infoX, infoY, { width: infoW, lineBreak: false, ellipsis: true });
-          infoY += 9;
+        const colors = [...new Set(product.variants.map(v => v.color).filter(Boolean))];
+        const detailLine = [
+          sizes.length  ? sizes.map(v => tr(String(v))).slice(0, 5).join(' ') : null,
+          colors.length ? colors.map(v => tr(String(v))).slice(0, 3).join(' / ') : null,
+        ].filter(Boolean).join('  •  ');
+        if (detailLine) {
+          doc.fontSize(5.5).font('Helvetica').fillColor(C_MGRAY)
+             .text(detailLine, infoX, infoY, { width: infoW, lineBreak: false, ellipsis: true });
         }
 
-        // precio — dentro de la tarjeta, fondo dorado
+        // precio — barra dorada al fondo de la tarjeta
         if (showPrice) {
-          const priceY = cardY + CARD_H - 20;
-          doc.rect(cardX, priceY, CARD_W, 20).fill(C_ACCENT);
+          const priceH = 20;
+          const priceY = cardY + CARD_H - priceH;
+          doc.rect(cardX, priceY, CARD_W, priceH).fill(C_ACCENT);
           doc.fontSize(10).font('Helvetica-Bold').fillColor('#ffffff')
              .text('Gs. ' + fmt(product.salePrice), infoX - 2, priceY + 5, { width: CARD_W - 4, align: 'center' });
+        } else {
+          // sin precio: linea dorada inferior
+          doc.rect(cardX, cardY + CARD_H - 3, CARD_W, 3).fill(C_ACCENT);
         }
 
-        // borde fino lateral izquierdo dorado
-        doc.rect(cardX, cardY, 2, CARD_H).fill(C_ACCENT);
+        // borde lateral izquierdo dorado
+        doc.rect(cardX, cardY, 2.5, CARD_H).fill(C_ACCENT);
 
         col++;
         if (col >= COLS) {
@@ -845,14 +904,56 @@ exports.getCatalog = async (req, res) => {
           pageY = rowStartY + CARD_H + GAP;
         }
       }
-
-      // fill remaining cols in last row if needed
-      if (col > 0) {
-        pageY = rowStartY + CARD_H + GAP;
-      }
-
-      drawPageFooter(pageNum);
+      if (col > 0) pageY = rowStartY + CARD_H + GAP;
     }
+
+    drawPageFooter(globalPageNum);
+
+    // ══════════════════════════════════════════════════════════
+    // PAGINA DE CONTACTO FINAL
+    // ══════════════════════════════════════════════════════════
+    doc.addPage();
+    doc.rect(0, 0, PAGE_W, PAGE_H).fill(C_COVER);
+    doc.rect(0, 0, PAGE_W, 8).fill(C_ACCENT);
+    doc.rect(0, PAGE_H - 8, PAGE_W, 8).fill(C_ACCENT);
+    doc.rect(0, 8, 5, PAGE_H - 16).fill(C_ACCENT);
+
+    // logo o nombre empresa centrado
+    if (logoBuf) {
+      try { doc.image(logoBuf, PAGE_W / 2 - 45, 80, { width: 90, height: 90, fit: [90, 90] }); } catch {}
+    }
+    const ctY = logoBuf ? 190 : 170;
+    doc.fontSize(32).font('Helvetica-Bold').fillColor('#ffffff')
+       .text(tr(COMPANY).toUpperCase(), ML, ctY, { width: INNER, align: 'center', characterSpacing: 4 });
+    doc.moveTo(ML + 80, ctY + 48).lineTo(PAGE_W - MR - 80, ctY + 48).lineWidth(1).strokeColor(C_ACCENT).stroke();
+
+    doc.fontSize(10).font('Helvetica').fillColor(C_ACCENT)
+       .text('PARA HACER TU PEDIDO', ML, ctY + 62, { width: INNER, align: 'center', characterSpacing: 2 });
+
+    // QR grande centrado
+    if (qrBuf) {
+      try {
+        const qrSize = 130;
+        doc.image(qrBuf, PAGE_W / 2 - qrSize / 2, ctY + 86, { width: qrSize, height: qrSize });
+        // marco dorado al QR
+        doc.rect(PAGE_W / 2 - qrSize / 2 - 4, ctY + 82, qrSize + 8, qrSize + 8)
+           .lineWidth(1.5).strokeColor(C_ACCENT).stroke();
+      } catch {}
+    }
+
+    const infoY2 = ctY + 240;
+    doc.fontSize(9).font('Helvetica-Bold').fillColor(C_ACCENT)
+       .text('WhatsApp', ML, infoY2, { width: INNER, align: 'center' });
+    doc.fontSize(13).font('Helvetica-Bold').fillColor('#ffffff')
+       .text(PHONE || '', ML, infoY2 + 14, { width: INNER, align: 'center' });
+
+    doc.moveTo(ML + 100, infoY2 + 38).lineTo(PAGE_W - MR - 100, infoY2 + 38).lineWidth(0.4).strokeColor('#374151').stroke();
+
+    const extraLines = [tr(ADDRESS), EMAIL, 'Envios a todo Paraguay', 'Cambios en 7 dias'].filter(Boolean);
+    extraLines.forEach((line, i) => {
+      doc.fontSize(8).font('Helvetica').fillColor('#9ca3af')
+         .text(tr(line), ML, infoY2 + 48 + i * 14, { width: INNER, align: 'center' });
+    });
 
     doc.end();
   } catch (err) {

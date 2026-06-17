@@ -34,6 +34,7 @@
     "nodemailer": "^6.9.11",
     "pdfkit": "^0.15.0",
     "prisma": "^5.10.0",
+    "qrcode": "^1.5.4",
     "socket.io": "^4.7.4",
     "uuid": "^9.0.1",
     "winston": "^3.12.0",
