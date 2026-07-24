@@ -278,6 +278,7 @@ exports.getLabels = async (req, res) => {
   try {
     const { items } = req.body; // [{productId, variantId, qty}]
     const PDFDocument = require('pdfkit');
+    const bwipjs = require('bwip-js');
     const settings = await prisma.setting.findMany({ where: { group: 'company' } });
     const cfg = {};
     settings.forEach(s => { cfg[s.key] = s.value; });
@@ -364,33 +365,38 @@ exports.getLabels = async (req, res) => {
       doc.fontSize(11).font('Helvetica-Bold').fillColor('#ffffff')
          .text('Gs. ' + price.toLocaleString('es-PY'), x + 4, y + LH - priceH + 6, { width: LEFT_W - 8, align: 'center' });
 
-      // ── Columna derecha (código de barras simulado) ────────────────────────
+      // ── Columna derecha (código de barras real) ───────────────────────────
       const RX = x + LEFT_W;
       const RW = LW - LEFT_W;
 
       // separador vertical dorado
       doc.rect(RX, y, 2.5, LH).fill(L_GOLD);
 
-      // Barras simuladas (código de barras decorativo)
-      const barX = RX + 12;
-      const barY = y + 18;
-      const barMaxH = LH - 50;
-      const barWidths = [1.2, 0.6, 1.8, 0.6, 1.2, 2.4, 0.6, 1.2, 0.6, 1.8, 0.6, 1.2, 2.4, 0.6, 1.2, 0.6, 1.8, 1.2, 0.6, 2.4, 0.6];
-      let bx = barX;
-      barWidths.forEach((w, i) => {
-        if (i % 2 === 0) {
-          doc.rect(bx, barY, w, barMaxH).fill(L_BLACK);
-        }
-        bx += w + 0.4;
-      });
-
-      // Texto debajo del código de barras
-      doc.fontSize(5).font('Helvetica').fillColor(L_GRAY)
-         .text(tr(String(variant?.sku || product.sku || 'PRODUCT CODE')), RX + 4, barY + barMaxH + 4, { width: RW - 8, align: 'center' });
-
-      // Precio en la columna derecha (inferior)
-      doc.fontSize(7).font('Helvetica-Bold').fillColor(L_BLACK)
-         .text('Gs. ' + price.toLocaleString('es-PY'), RX + 4, y + LH - 16, { width: RW - 8, align: 'center' });
+      // Generar barcode real con bwip-js (Code128)
+      const barcodeValue = product.barcode || variant?.sku || product.sku || '0000000000';
+      const barPngPad = 8;
+      const barW = RW - barPngPad * 2;
+      const barH = LH - 40;
+      try {
+        const barPng = await bwipjs.toBuffer({
+          bcid:        'code128',
+          text:        String(barcodeValue).replace(/[^\x20-\x7E]/g, ''),
+          scale:       2,
+          height:      Math.round(barH * 0.35),  // en mm (bwip usa mm)
+          includetext: true,
+          textxalign:  'center',
+          textsize:    8,
+          padding:     2,
+          backgroundcolor: 'ffffff',
+        });
+        const barImgW = barW;
+        const barImgH = barH * 0.72;
+        doc.image(barPng, RX + barPngPad, y + 14, { width: barImgW, height: barImgH, fit: [barImgW, barImgH] });
+      } catch {
+        // fallback texto si falla barcode
+        doc.fontSize(6).font('Helvetica').fillColor(L_GRAY)
+           .text(tr(String(barcodeValue)), RX + 4, y + 30, { width: RW - 8, align: 'center' });
+      }
 
       col++;
       if (col >= COLS) { col = 0; row++; }
