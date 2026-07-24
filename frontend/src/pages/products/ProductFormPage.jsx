@@ -18,28 +18,6 @@ import { useThemeStore } from '@/store/theme.store';
 import { generateSKU } from '@/utils/format';
 import { clsx } from 'clsx';
 
-const VARIANT_PRESETS = {
-  'Ropa (Talle + Color)': {
-    attr1: { name: 'Talle', values: ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'] },
-    attr2: { name: 'Color', values: ['Negro', 'Blanco', 'Gris', 'Azul', 'Rojo', 'Verde', 'Rosa', 'Beige', 'Marrón'] }
-  },
-  'Calzado (Talle + Color)': {
-    attr1: { name: 'Talle', values: ['34', '35', '36', '37', '38', '39', '40', '41', '42', '43', '44'] },
-    attr2: { name: 'Color', values: ['Negro', 'Blanco', 'Marrón', 'Beige', 'Azul', 'Rojo'] }
-  },
-  'Solo Color': {
-    attr1: { name: 'Color', values: ['Negro', 'Blanco', 'Gris', 'Azul', 'Rojo', 'Verde', 'Rosa', 'Beige'] },
-    attr2: null
-  },
-  'Solo Talle': {
-    attr1: { name: 'Talle', values: ['XS', 'S', 'M', 'L', 'XL', 'XXL'] },
-    attr2: null
-  },
-  'Personalizado': {
-    attr1: { name: '', values: [] },
-    attr2: { name: '', values: [] }
-  }
-};
 
 export default function ProductFormPage() {
   const { id } = useParams();
@@ -53,11 +31,8 @@ export default function ProductFormPage() {
   const [images, setImages] = useState([]);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [productLoaded, setProductLoaded] = useState(false);
-  const [preset, setPreset] = useState('Ropa (Talle + Color)');
-  const [attr1, setAttr1] = useState({ name: 'Talle', values: ['XS','S','M','L','XL','XXL','XXXL'], custom: '' });
-  const [attr2, setAttr2] = useState({ name: 'Color', values: ['Negro','Blanco','Gris','Azul','Rojo','Verde','Rosa','Beige','Marrón'], custom: '' });
-  const [selectedAttr1, setSelectedAttr1] = useState([]);
-  const [selectedAttr2, setSelectedAttr2] = useState([]);
+  const [attr1, setAttr1] = useState({ name: 'Talle', text: '' });
+  const [attr2, setAttr2] = useState({ name: 'Color', text: '', enabled: true });
 
   const { register, handleSubmit, setValue, watch, reset, formState: { errors } } = useForm({
     defaultValues: {
@@ -190,40 +165,27 @@ export default function ProductFormPage() {
     });
   };
 
-  // Cambiar preset de variantes
-  const applyPreset = (presetName) => {
-    setPreset(presetName);
-    const p = VARIANT_PRESETS[presetName];
-    if (p.attr1) setAttr1({ ...p.attr1, custom: '' });
-    if (p.attr2 !== undefined) setAttr2(p.attr2 ? { ...p.attr2, custom: '' } : { name: '', values: [], custom: '' });
-    setSelectedAttr1([]);
-    setSelectedAttr2([]);
-  };
-
-  // Agregar valor custom a atributo
-  const addCustomValue = (which) => {
-    if (which === 1 && attr1.custom.trim()) {
-      setAttr1(a => ({ ...a, values: [...a.values, a.custom.trim()], custom: '' }));
-    } else if (which === 2 && attr2.custom.trim()) {
-      setAttr2(a => ({ ...a, values: [...a.values, a.custom.trim()], custom: '' }));
-    }
-  };
-
-  // Generar variantes genéricas
+  // Generar variantes desde texto libre
   const generateVariants = () => {
-    const v1 = selectedAttr1.length > 0 ? selectedAttr1 : [null];
-    const v2 = selectedAttr2.length > 0 ? selectedAttr2 : [null];
+    const v1 = attr1.text.split(',').map(s => s.trim()).filter(Boolean);
+    const v2 = attr2.enabled ? attr2.text.split(',').map(s => s.trim()).filter(Boolean) : [];
+    if (v1.length === 0) { toast.error(`Escribí al menos un valor para "${attr1.name}"`); return; }
+    const a2vals = v2.length > 0 ? v2 : [null];
     const newVariants = [];
     v1.forEach(val1 => {
-      v2.forEach(val2 => {
-        const size  = attr1.name === 'Talle' ? val1 : (attr2.name === 'Talle' ? val2 : val1);
-        const color = attr1.name === 'Color' ? val1 : (attr2.name === 'Color' ? val2 : val2);
-        const existing = variants.find(v => v.size === size && v.color === color);
+      a2vals.forEach(val2 => {
+        const size  = attr1.name.toLowerCase().includes('talle') || attr1.name.toLowerCase().includes('tama') ? val1
+                    : attr2.name.toLowerCase().includes('talle') || attr2.name.toLowerCase().includes('tama') ? val2
+                    : val1;
+        const color = attr1.name.toLowerCase().includes('color') ? val1
+                    : attr2.name.toLowerCase().includes('color') ? val2
+                    : val2;
+        const label = [val1, val2].filter(Boolean).join('-');
+        const existing = variants.find(v => v.sku === `${watch('sku') || 'SKU'}-${label.replace(/ /g,'').toUpperCase().slice(0,10)}`);
         if (!existing) {
-          const label = [val1, val2].filter(Boolean).join('-');
           newVariants.push({
             size, color,
-            sku: `${watch('sku') || 'SKU'}-${label.replace(/ /g, '').toUpperCase().slice(0, 8)}`,
+            sku: `${watch('sku') || 'SKU'}-${label.replace(/ /g,'').toUpperCase().slice(0,10)}`,
             price: null, isActive: true
           });
         }
@@ -405,104 +367,85 @@ export default function ProductFormPage() {
 
           {/* Variants */}
           <div className={cardClass}>
-            <h3 className={clsx('font-semibold', isDark ? 'text-white' : 'text-dark-900')}>
-              Variantes del Producto
-            </h3>
-
-            {/* Preset selector */}
-            <div>
-              <label className={labelClass}>Tipo de variante</label>
-              <div className="flex flex-wrap gap-2">
-                {Object.keys(VARIANT_PRESETS).map(p => (
-                  <button key={p} type="button" onClick={() => applyPreset(p)}
-                    className={clsx('px-3 py-1.5 rounded-lg text-xs font-medium border transition-all',
-                      preset === p
-                        ? 'bg-primary-500 border-primary-500 text-white'
-                        : isDark ? 'border-dark-700 text-dark-400 hover:border-primary-500' : 'border-gray-200 text-gray-600 hover:border-primary-400'
-                    )}>{p}</button>
-                ))}
-              </div>
+            <div className="flex items-center justify-between">
+              <h3 className={clsx('font-semibold', isDark ? 'text-white' : 'text-dark-900')}>
+                Variantes del Producto
+              </h3>
+              <span className={clsx('text-xs', isDark ? 'text-dark-500' : 'text-gray-400')}>opcional</span>
             </div>
 
+            <p className={clsx('text-xs', isDark ? 'text-dark-400' : 'text-gray-500')}>
+              Escribí los valores separados por coma. Ej: <span className="font-mono">38, 39, 40, 41</span>
+            </p>
+
             {/* Atributo 1 */}
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <label className={labelClass}>Nombre atributo</label>
                 <input
                   value={attr1.name}
                   onChange={e => setAttr1(a => ({ ...a, name: e.target.value }))}
-                  placeholder="Nombre (ej: Talle, Tamaño, Sabor...)"
-                  className={clsx(inputClass, 'flex-1')}
+                  placeholder="Talle, Tamaño..."
+                  className={inputClass}
                 />
               </div>
-              <div className="flex flex-wrap gap-2">
-                {attr1.values.map(v => (
-                  <button key={v} type="button"
-                    onClick={() => setSelectedAttr1(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v])}
-                    className={clsx('px-3 py-1 rounded-lg text-xs font-medium border transition-all',
-                      selectedAttr1.includes(v)
-                        ? 'bg-primary-500 border-primary-500 text-white'
-                        : isDark ? 'border-dark-700 text-dark-400' : 'border-gray-200 text-gray-600'
-                    )}>{v}</button>
-                ))}
-                <div className="flex gap-1">
-                  <input value={attr1.custom} onChange={e => setAttr1(a => ({ ...a, custom: e.target.value }))}
-                    onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addCustomValue(1))}
-                    placeholder="+ nuevo valor"
-                    className={clsx('px-2 py-1 rounded-lg text-xs border outline-none w-24',
-                      isDark ? 'bg-dark-800 border-dark-700 text-white' : 'bg-white border-gray-200')} />
-                  <button type="button" onClick={() => addCustomValue(1)}
-                    className="px-2 py-1 rounded-lg bg-primary-500/10 text-primary-500 text-xs hover:bg-primary-500/20">+</button>
-                </div>
+              <div className="col-span-2">
+                <label className={labelClass}>Valores (separados por coma)</label>
+                <input
+                  value={attr1.text}
+                  onChange={e => setAttr1(a => ({ ...a, text: e.target.value }))}
+                  placeholder="38, 39, 40, 41, 42"
+                  className={inputClass}
+                />
               </div>
             </div>
 
-            {/* Atributo 2 (opcional) */}
-            {VARIANT_PRESETS[preset]?.attr2 !== null && (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <input
-                    value={attr2.name}
-                    onChange={e => setAttr2(a => ({ ...a, name: e.target.value }))}
-                    placeholder="Segundo atributo (ej: Color, Aroma...) — opcional"
-                    className={clsx(inputClass, 'flex-1')}
-                  />
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {attr2.values.map(v => (
-                    <button key={v} type="button"
-                      onClick={() => setSelectedAttr2(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v])}
-                      className={clsx('px-3 py-1 rounded-lg text-xs font-medium border transition-all',
-                        selectedAttr2.includes(v)
-                          ? 'bg-violet-500 border-violet-500 text-white'
-                          : isDark ? 'border-dark-700 text-dark-400' : 'border-gray-200 text-gray-600'
-                      )}>{v}</button>
-                  ))}
-                  <div className="flex gap-1">
-                    <input value={attr2.custom} onChange={e => setAttr2(a => ({ ...a, custom: e.target.value }))}
-                      onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addCustomValue(2))}
-                      placeholder="+ nuevo valor"
-                      className={clsx('px-2 py-1 rounded-lg text-xs border outline-none w-24',
-                        isDark ? 'bg-dark-800 border-dark-700 text-white' : 'bg-white border-gray-200')} />
-                    <button type="button" onClick={() => addCustomValue(2)}
-                      className="px-2 py-1 rounded-lg bg-violet-500/10 text-violet-500 text-xs hover:bg-violet-500/20">+</button>
+            {/* Atributo 2 toggle + campos */}
+            <div>
+              <button type="button"
+                onClick={() => setAttr2(a => ({ ...a, enabled: !a.enabled }))}
+                className={clsx('text-xs font-medium transition-colors', attr2.enabled ? 'text-red-400 hover:text-red-500' : 'text-primary-500 hover:text-primary-600')}
+              >
+                {attr2.enabled ? '− Quitar segundo atributo' : '+ Agregar segundo atributo (ej: Color)'}
+              </button>
+
+              {attr2.enabled && (
+                <div className="grid grid-cols-3 gap-2 mt-2">
+                  <div>
+                    <label className={labelClass}>Nombre atributo</label>
+                    <input
+                      value={attr2.name}
+                      onChange={e => setAttr2(a => ({ ...a, name: e.target.value }))}
+                      placeholder="Color, Aroma..."
+                      className={inputClass}
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <label className={labelClass}>Valores (separados por coma)</label>
+                    <input
+                      value={attr2.text}
+                      onChange={e => setAttr2(a => ({ ...a, text: e.target.value }))}
+                      placeholder="Negro, Blanco, Rojo"
+                      className={inputClass}
+                    />
                   </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
 
             <button type="button" onClick={generateVariants}
               className="flex items-center gap-2 px-4 py-2 bg-primary-500/10 text-primary-500 hover:bg-primary-500/20 rounded-xl text-sm font-medium transition-colors">
               <Plus className="w-4 h-4" />
-              Generar Variantes ({selectedAttr1.length} × {selectedAttr2.length || 1})
+              Generar Variantes
             </button>
 
             {variants.length > 0 && (
-              <div className="space-y-2 mt-2">
+              <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <p className={clsx('text-xs font-semibold', isDark ? 'text-dark-400' : 'text-gray-500')}>
-                    {variants.length} variante(s) generadas
+                    {variants.length} variante(s)
                   </p>
-                  <button type="button" onClick={() => setVariants([])} className="text-xs text-red-400 hover:text-red-500">Limpiar todo</button>
+                  <button type="button" onClick={() => setVariants([])} className="text-xs text-red-400 hover:text-red-500">Limpiar</button>
                 </div>
                 <div className="max-h-48 overflow-y-auto space-y-2">
                   {variants.map((v, i) => (
