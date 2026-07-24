@@ -342,21 +342,23 @@ exports.getLabels = async (req, res) => {
       const barcodeValue = product.barcode || variant?.sku || product.sku || '0000000000';
       const barY  = y + P + (vInfo ? 30 : 25);
       const barW  = LW - P * 2;
-      const barH  = LH - (vInfo ? 68 : 63);
+      const barH  = LH - (vInfo ? 62 : 57);
       try {
         const barPng = await bwipjs.toBuffer({
           bcid:        'code128',
           text:        String(barcodeValue).replace(/[^\x20-\x7E]/g, ''),
-          scale:       2,
-          height:      Math.round(barH * 0.55),
-          includetext: true,
-          textxalign:  'center',
-          textsize:    6,
-          padding:     1,
+          scale:       4,           // mayor resolución → más fácil de leer
+          height:      18,          // altura fija en mm — barras bien altas
+          includetext: false,       // sin texto debajo del barcode (va aparte)
+          padding:     2,
           backgroundcolor: 'ffffff',
           barcolor:    '000000',
         });
-        doc.image(barPng, x + P, barY, { fit: [barW, barH], align: 'center' });
+        doc.image(barPng, x + P, barY, { fit: [barW, barH] });
+        // número del código debajo, pequeño
+        doc.fontSize(4.5).font('Helvetica').fillColor(C_MID)
+           .text(tr(String(barcodeValue)), x + P, barY + barH + 1,
+                 { width: barW, align: 'center' });
       } catch {
         doc.fontSize(5).font('Helvetica').fillColor(C_MID)
            .text(tr(String(barcodeValue)), x + P, barY + 10, { width: barW, align: 'center' });
@@ -365,7 +367,7 @@ exports.getLabels = async (req, res) => {
       // Precio — grande y negro, al fondo
       const price = Number(variant?.price || product.salePrice || 0);
       doc.fontSize(8.5).font('Helvetica-Bold').fillColor(C_INK)
-         .text('Gs. ' + price.toLocaleString('es-PY'), x + P, y + LH - 14,
+         .text('Gs. ' + price.toLocaleString('es-PY'), x + P, y + LH - 13,
                { width: LW - P * 2, align: 'center' });
 
       col++;
