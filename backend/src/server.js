@@ -33,9 +33,14 @@ app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' }
 }));
 
-// CORS: soporte para multiples origenes (local + Railway)
-const allowedOrigins = (process.env.CORS_ORIGINS || process.env.SOCKET_CORS_ORIGIN || 'http://localhost:3000')
-  .split(',').map(o => o.trim()).filter(Boolean);
+// CORS: soporte para multiples origenes
+const allowedOrigins = [
+  process.env.CORS_ORIGINS,
+  process.env.SOCKET_CORS_ORIGIN,
+  process.env.FRONTEND_URL,
+  'http://localhost:3000',
+  'http://localhost:5173'
+].filter(Boolean).flatMap(o => o.split(',')).map(o => o.trim()).filter(Boolean);
 
 app.use(cors({
   origin: (origin, callback) => {
