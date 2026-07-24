@@ -300,15 +300,15 @@ exports.getLabels = async (req, res) => {
       .replace(/[^\x00-\x7F]/g, '');
 
     const W_PAGE = 595.28, H_PAGE = 841.89;
-    // 2 cols x 5 rows — etiquetas horizontales minimalistas
-    const COLS = 2, ROWS = 5;
-    const PAD = 20, GAP_X = 14, GAP_Y = 12;
-    const LW = (W_PAGE - PAD * 2 - GAP_X * (COLS - 1)) / COLS;
-    const LH = (H_PAGE - PAD * 2 - GAP_Y * (ROWS - 1)) / ROWS;
+    // 4 cols x 8 rows = 32 etiquetas por hoja, tamaño pequeño
+    const COLS = 4, ROWS = 8;
+    const PAD = 12, GAP_X = 6, GAP_Y = 6;
+    const LW = (W_PAGE - PAD * 2 - GAP_X * (COLS - 1)) / COLS;  // ~130pt
+    const LH = (H_PAGE - PAD * 2 - GAP_Y * (ROWS - 1)) / ROWS;  // ~97pt
 
-    const C_INK  = '#111111';   // único color
-    const C_MID  = '#888888';
-    const INNER  = 10;          // padding interno
+    const C_INK = '#000000';
+    const C_MID = '#666666';
+    const P     = 5; // padding interno
 
     let col = 0, row = 0;
 
@@ -317,93 +317,56 @@ exports.getLabels = async (req, res) => {
       const x = PAD + col * (LW + GAP_X);
       const y = PAD + row * (LH + GAP_Y);
 
-      // fondo blanco
+      // fondo blanco, borde fino
       doc.rect(x, y, LW, LH).fill('#ffffff');
-      // borde exterior fino
-      doc.rect(x, y, LW, LH).lineWidth(0.6).strokeColor(C_INK).stroke();
+      doc.rect(x, y, LW, LH).lineWidth(0.4).strokeColor('#aaaaaa').stroke();
 
-      // ── Layout: info a la izquierda, barcode a la derecha ─────────────────
-      const LEFT_W = Math.round(LW * 0.52);
-      const RX     = x + LEFT_W;
-      const RW     = LW - LEFT_W;
+      // Empresa — centrado, pequeño, arriba
+      doc.fontSize(5).font('Helvetica-Bold').fillColor(C_INK)
+         .text(tr(company).toUpperCase(), x + P, y + P + 1,
+               { width: LW - P * 2, align: 'center', characterSpacing: 1.5 });
 
-      // línea divisoria vertical
-      doc.moveTo(RX, y + INNER).lineTo(RX, y + LH - INNER)
-         .lineWidth(0.4).strokeColor('#cccccc').stroke();
+      // Nombre producto — centrado
+      const name = tr(product.name).slice(0, 28);
+      doc.fontSize(6.5).font('Helvetica-Bold').fillColor(C_INK)
+         .text(name, x + P, y + P + 11, { width: LW - P * 2, align: 'center', lineBreak: false, ellipsis: true });
 
-      // ── LADO IZQUIERDO ─────────────────────────────────────────────────────
-
-      // Empresa — muy pequeño, con tracking
-      doc.fontSize(5.5).font('Helvetica-Bold').fillColor(C_INK)
-         .text(tr(company).toUpperCase(), x + INNER, y + INNER + 2,
-               { width: LEFT_W - INNER * 2, characterSpacing: 2 });
-
-      // línea fina bajo empresa
-      const lineY = y + INNER + 13;
-      doc.moveTo(x + INNER, lineY).lineTo(x + LEFT_W - INNER, lineY)
-         .lineWidth(0.3).strokeColor('#dddddd').stroke();
-
-      // Nombre del producto
-      const name = tr(product.name).slice(0, 30);
-      doc.fontSize(8.5).font('Helvetica-Bold').fillColor(C_INK)
-         .text(name, x + INNER, lineY + 7, { width: LEFT_W - INNER * 2, lineBreak: true, height: 22, ellipsis: true });
-
-      // Categoría — gris pequeño
-      const cat = tr(product.brand?.name || product.category?.name || '').toUpperCase();
-      if (cat) {
-        doc.fontSize(5.5).font('Helvetica').fillColor(C_MID)
-           .text(cat, x + INNER, lineY + 31, { width: LEFT_W - INNER * 2 });
-      }
-
-      // Variante grande (talle / color)
-      const vInfo = [variant?.size, variant?.color].filter(Boolean).map(v => tr(String(v))).join('  /  ');
+      // Variante (talle/color) si existe
+      const vInfo = [variant?.size, variant?.color].filter(Boolean).map(v => tr(String(v))).join(' / ');
       if (vInfo) {
-        doc.fontSize(20).font('Helvetica-Bold').fillColor(C_INK)
-           .text(vInfo, x + INNER, lineY + 42, { width: LEFT_W - INNER * 2, lineBreak: false });
+        doc.fontSize(6).font('Helvetica').fillColor(C_MID)
+           .text(vInfo, x + P, y + P + 20, { width: LW - P * 2, align: 'center' });
       }
 
-      // línea separadora antes del precio
-      const priceLineY = y + LH - 22;
-      doc.moveTo(x + INNER, priceLineY).lineTo(x + LEFT_W - INNER, priceLineY)
-         .lineWidth(0.3).strokeColor('#dddddd').stroke();
-
-      // SKU — gris diminuto
-      const sku = tr(String(variant?.sku || product.sku || ''));
-      doc.fontSize(5).font('Helvetica').fillColor(C_MID)
-         .text(sku, x + INNER, priceLineY - 10, { width: LEFT_W - INNER * 2 });
-
-      // Precio — bold, negro, abajo
-      const price = Number(variant?.price || product.salePrice || 0);
-      doc.fontSize(10).font('Helvetica-Bold').fillColor(C_INK)
-         .text('Gs. ' + price.toLocaleString('es-PY'), x + INNER, priceLineY + 6,
-               { width: LEFT_W - INNER * 2 });
-
-      // ── LADO DERECHO: código de barras ─────────────────────────────────────
+      // Código de barras — centrado, ocupa la mayor parte
       const barcodeValue = product.barcode || variant?.sku || product.sku || '0000000000';
-      const barPad = 10;
-      const barAvailW = RW - barPad * 2;
-      const barAvailH = LH - barPad * 2;
+      const barY  = y + P + (vInfo ? 30 : 25);
+      const barW  = LW - P * 2;
+      const barH  = LH - (vInfo ? 68 : 63);
       try {
         const barPng = await bwipjs.toBuffer({
           bcid:        'code128',
           text:        String(barcodeValue).replace(/[^\x20-\x7E]/g, ''),
           scale:       2,
-          height:      Math.round(barAvailH * 0.28),
+          height:      Math.round(barH * 0.55),
           includetext: true,
           textxalign:  'center',
-          textsize:    7,
-          padding:     2,
+          textsize:    6,
+          padding:     1,
           backgroundcolor: 'ffffff',
-          barcolor:    '111111',
+          barcolor:    '000000',
         });
-        doc.image(barPng, RX + barPad, y + barPad, {
-          fit: [barAvailW, barAvailH],
-          align: 'center', valign: 'center'
-        });
+        doc.image(barPng, x + P, barY, { fit: [barW, barH], align: 'center' });
       } catch {
-        doc.fontSize(6).font('Helvetica').fillColor(C_MID)
-           .text(tr(String(barcodeValue)), RX + barPad, y + LH / 2 - 5, { width: barAvailW, align: 'center' });
+        doc.fontSize(5).font('Helvetica').fillColor(C_MID)
+           .text(tr(String(barcodeValue)), x + P, barY + 10, { width: barW, align: 'center' });
       }
+
+      // Precio — grande y negro, al fondo
+      const price = Number(variant?.price || product.salePrice || 0);
+      doc.fontSize(8.5).font('Helvetica-Bold').fillColor(C_INK)
+         .text('Gs. ' + price.toLocaleString('es-PY'), x + P, y + LH - 14,
+               { width: LW - P * 2, align: 'center' });
 
       col++;
       if (col >= COLS) { col = 0; row++; }
