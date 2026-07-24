@@ -85,9 +85,9 @@ export default function DashboardLayout() {
               animate={{ x: 0 }}
               exit={{ x: -280 }}
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="fixed left-0 top-0 bottom-0 w-64 z-50 lg:hidden"
+              className="fixed left-0 top-0 bottom-0 w-72 z-50 lg:hidden shadow-2xl"
             >
-              <Sidebar />
+              <Sidebar onClose={() => setMobileSidebarOpen(false)} />
             </motion.div>
           </>
         )}
