@@ -299,77 +299,98 @@ exports.getLabels = async (req, res) => {
       .replace(/[^\x00-\x7F]/g, '');
 
     const W_PAGE = 595.28, H_PAGE = 841.89;
-    // 4 cols x 6 rows — etiquetas más anchas tipo moda
-    const COLS = 4, ROWS = 6;
-    const PAD = 14, GAP = 6;
-    const LW = (W_PAGE - PAD * 2 - GAP * (COLS - 1)) / COLS;  // ~130pt
-    const LH = (H_PAGE - PAD * 2 - GAP * (ROWS - 1)) / ROWS;  // ~132pt
+    // Etiquetas horizontales tipo moda: 2 cols x 5 rows
+    const COLS = 2, ROWS = 5;
+    const PAD = 18, GAP_X = 12, GAP_Y = 10;
+    const LW = (W_PAGE - PAD * 2 - GAP_X * (COLS - 1)) / COLS;  // ~277pt
+    const LH = (H_PAGE - PAD * 2 - GAP_Y * (ROWS - 1)) / ROWS;  // ~155pt
 
-    // paleta editorial
-    const L_BLACK  = '#0d0d0d';
-    const L_GOLD   = '#c9a84c';
-    const L_GRAY   = '#6b7280';
-    const L_LGRAY  = '#f5f5f5';
+    const L_BLACK = '#0d0d0d';
+    const L_GOLD  = '#c9a84c';
+    const L_GRAY  = '#6b7280';
 
     let col = 0, row = 0;
 
     const drawLabel = async (product, variant, idx) => {
       if (idx > 0 && col === 0 && row === 0) doc.addPage();
-      const x = PAD + col * (LW + GAP);
-      const y = PAD + row * (LH + GAP);
+      const x = PAD + col * (LW + GAP_X);
+      const y = PAD + row * (LH + GAP_Y);
 
-      // fondo blanco
+      // fondo blanco con borde fino
       doc.rect(x, y, LW, LH).fill('#ffffff');
+      doc.rect(x, y, LW, LH).lineWidth(0.5).strokeColor('#d1d5db').stroke();
 
-      // borde fino completo
-      doc.rect(x, y, LW, LH).lineWidth(0.4).strokeColor('#e5e7eb').stroke();
+      // ── Columna izquierda (info) — 55% del ancho ──────────────────────────
+      const LEFT_W = Math.round(LW * 0.55);
 
-      // borde dorado izquierdo
-      doc.rect(x, y, 2.5, LH).fill(L_GOLD);
+      // Franja superior negra (cabecera empresa)
+      const HEAD_H = 20;
+      doc.rect(x, y, LEFT_W, HEAD_H).fill(L_BLACK);
+      doc.fontSize(6.5).font('Helvetica-Bold').fillColor('#ffffff')
+         .text(tr(company).toUpperCase(), x + 8, y + 6, { width: LEFT_W - 12, align: 'left', characterSpacing: 1.2 });
 
-      // franja superior negra
-      const HEAD_H = 18;
-      doc.rect(x, y, LW, HEAD_H).fill(L_BLACK);
+      // Nombre del producto
+      const name = tr(product.name).slice(0, 32);
+      doc.fontSize(9).font('Helvetica-Bold').fillColor(L_BLACK)
+         .text(name, x + 8, y + HEAD_H + 8, { width: LEFT_W - 14, lineBreak: true, height: 24, ellipsis: true });
 
-      // nombre de empresa en header
-      doc.fontSize(5.5).font('Helvetica-Bold').fillColor('#ffffff')
-         .text(tr(company).toUpperCase(), x + 6, y + 5, { width: LW - 10, align: 'left', characterSpacing: 1 });
-
-      // categoria / marca en header derecha
-      const brandTxt = tr(product.brand?.name || product.category?.name || '').slice(0, 12).toUpperCase();
-      if (brandTxt) {
-        doc.fontSize(5).font('Helvetica').fillColor(L_GOLD)
-           .text(brandTxt, x + 4, y + 5, { width: LW - 8, align: 'right' });
+      // Categoría/Marca en dorado
+      const brand = tr(product.brand?.name || product.category?.name || '').toUpperCase();
+      if (brand) {
+        doc.fontSize(6).font('Helvetica').fillColor(L_GOLD)
+           .text(brand, x + 8, y + HEAD_H + 34, { width: LEFT_W - 14 });
       }
 
-      // nombre del producto
-      const name = tr(product.name).slice(0, 26);
-      doc.fontSize(8).font('Helvetica-Bold').fillColor(L_BLACK)
-         .text(name, x + 6, y + HEAD_H + 7, { width: LW - 10, lineBreak: false, ellipsis: true });
-
-      // talle / color
-      const vInfo = [variant?.size, variant?.color].filter(Boolean).map(v => tr(String(v))).join('  /  ');
-      if (vInfo) {
-        doc.fontSize(7).font('Helvetica').fillColor(L_GRAY)
-           .text(vInfo, x + 6, y + HEAD_H + 18, { width: LW - 10, lineBreak: false });
-      }
-
-      // linea separadora
-      const sepY = y + HEAD_H + 30;
-      doc.moveTo(x + 6, sepY).lineTo(x + LW - 6, sepY)
-         .lineWidth(0.3).strokeColor('#e5e7eb').stroke();
+      // Separador
+      const sep1 = y + HEAD_H + 46;
+      doc.moveTo(x + 8, sep1).lineTo(x + LEFT_W - 8, sep1).lineWidth(0.3).strokeColor('#e5e7eb').stroke();
 
       // SKU
-      const sku = variant?.sku || product.sku || '';
-      doc.fontSize(5.5).font('Helvetica').fillColor(L_GRAY)
-         .text('SKU: ' + tr(String(sku)), x + 6, sepY + 5, { width: LW - 10 });
+      const sku = tr(String(variant?.sku || product.sku || ''));
+      doc.fontSize(6).font('Helvetica').fillColor(L_GRAY)
+         .text('SKU: ' + sku, x + 8, sep1 + 5, { width: LEFT_W - 14 });
 
-      // precio — franja dorada inferior
+      // Variante (talle / color) — grande y destacado
+      const vInfo = [variant?.size, variant?.color].filter(Boolean).map(v => tr(String(v))).join(' / ');
+      if (vInfo) {
+        doc.fontSize(22).font('Helvetica-Bold').fillColor(L_BLACK)
+           .text(vInfo, x + 8, sep1 + 16, { width: LEFT_W - 14, lineBreak: false });
+      }
+
+      // Franja dorada con precio en la parte inferior izquierda
+      const priceH = 24;
+      doc.rect(x, y + LH - priceH, LEFT_W, priceH).fill(L_GOLD);
       const price = Number(variant?.price || product.salePrice || 0);
-      const priceH = 22;
-      doc.rect(x, y + LH - priceH, LW, priceH).fill(L_GOLD);
-      doc.fontSize(10.5).font('Helvetica-Bold').fillColor('#ffffff')
-         .text('Gs. ' + price.toLocaleString('es-PY'), x + 4, y + LH - priceH + 6, { width: LW - 8, align: 'center' });
+      doc.fontSize(11).font('Helvetica-Bold').fillColor('#ffffff')
+         .text('Gs. ' + price.toLocaleString('es-PY'), x + 4, y + LH - priceH + 6, { width: LEFT_W - 8, align: 'center' });
+
+      // ── Columna derecha (código de barras simulado) ────────────────────────
+      const RX = x + LEFT_W;
+      const RW = LW - LEFT_W;
+
+      // separador vertical dorado
+      doc.rect(RX, y, 2.5, LH).fill(L_GOLD);
+
+      // Barras simuladas (código de barras decorativo)
+      const barX = RX + 12;
+      const barY = y + 18;
+      const barMaxH = LH - 50;
+      const barWidths = [1.2, 0.6, 1.8, 0.6, 1.2, 2.4, 0.6, 1.2, 0.6, 1.8, 0.6, 1.2, 2.4, 0.6, 1.2, 0.6, 1.8, 1.2, 0.6, 2.4, 0.6];
+      let bx = barX;
+      barWidths.forEach((w, i) => {
+        if (i % 2 === 0) {
+          doc.rect(bx, barY, w, barMaxH).fill(L_BLACK);
+        }
+        bx += w + 0.4;
+      });
+
+      // Texto debajo del código de barras
+      doc.fontSize(5).font('Helvetica').fillColor(L_GRAY)
+         .text(tr(String(variant?.sku || product.sku || 'PRODUCT CODE')), RX + 4, barY + barMaxH + 4, { width: RW - 8, align: 'center' });
+
+      // Precio en la columna derecha (inferior)
+      doc.fontSize(7).font('Helvetica-Bold').fillColor(L_BLACK)
+         .text('Gs. ' + price.toLocaleString('es-PY'), RX + 4, y + LH - 16, { width: RW - 8, align: 'center' });
 
       col++;
       if (col >= COLS) { col = 0; row++; }
