@@ -300,15 +300,15 @@ exports.getLabels = async (req, res) => {
       .replace(/[^\x00-\x7F]/g, '');
 
     const W_PAGE = 595.28, H_PAGE = 841.89;
-    // Etiquetas horizontales tipo moda: 2 cols x 5 rows
+    // 2 cols x 5 rows — etiquetas horizontales minimalistas
     const COLS = 2, ROWS = 5;
-    const PAD = 18, GAP_X = 12, GAP_Y = 10;
-    const LW = (W_PAGE - PAD * 2 - GAP_X * (COLS - 1)) / COLS;  // ~277pt
-    const LH = (H_PAGE - PAD * 2 - GAP_Y * (ROWS - 1)) / ROWS;  // ~155pt
+    const PAD = 20, GAP_X = 14, GAP_Y = 12;
+    const LW = (W_PAGE - PAD * 2 - GAP_X * (COLS - 1)) / COLS;
+    const LH = (H_PAGE - PAD * 2 - GAP_Y * (ROWS - 1)) / ROWS;
 
-    const L_BLACK = '#0d0d0d';
-    const L_GOLD  = '#c9a84c';
-    const L_GRAY  = '#6b7280';
+    const C_INK  = '#111111';   // único color
+    const C_MID  = '#888888';
+    const INNER  = 10;          // padding interno
 
     let col = 0, row = 0;
 
@@ -317,85 +317,92 @@ exports.getLabels = async (req, res) => {
       const x = PAD + col * (LW + GAP_X);
       const y = PAD + row * (LH + GAP_Y);
 
-      // fondo blanco con borde fino
+      // fondo blanco
       doc.rect(x, y, LW, LH).fill('#ffffff');
-      doc.rect(x, y, LW, LH).lineWidth(0.5).strokeColor('#d1d5db').stroke();
+      // borde exterior fino
+      doc.rect(x, y, LW, LH).lineWidth(0.6).strokeColor(C_INK).stroke();
 
-      // ── Columna izquierda (info) — 55% del ancho ──────────────────────────
-      const LEFT_W = Math.round(LW * 0.55);
+      // ── Layout: info a la izquierda, barcode a la derecha ─────────────────
+      const LEFT_W = Math.round(LW * 0.52);
+      const RX     = x + LEFT_W;
+      const RW     = LW - LEFT_W;
 
-      // Franja superior negra (cabecera empresa)
-      const HEAD_H = 20;
-      doc.rect(x, y, LEFT_W, HEAD_H).fill(L_BLACK);
-      doc.fontSize(6.5).font('Helvetica-Bold').fillColor('#ffffff')
-         .text(tr(company).toUpperCase(), x + 8, y + 6, { width: LEFT_W - 12, align: 'left', characterSpacing: 1.2 });
+      // línea divisoria vertical
+      doc.moveTo(RX, y + INNER).lineTo(RX, y + LH - INNER)
+         .lineWidth(0.4).strokeColor('#cccccc').stroke();
+
+      // ── LADO IZQUIERDO ─────────────────────────────────────────────────────
+
+      // Empresa — muy pequeño, con tracking
+      doc.fontSize(5.5).font('Helvetica-Bold').fillColor(C_INK)
+         .text(tr(company).toUpperCase(), x + INNER, y + INNER + 2,
+               { width: LEFT_W - INNER * 2, characterSpacing: 2 });
+
+      // línea fina bajo empresa
+      const lineY = y + INNER + 13;
+      doc.moveTo(x + INNER, lineY).lineTo(x + LEFT_W - INNER, lineY)
+         .lineWidth(0.3).strokeColor('#dddddd').stroke();
 
       // Nombre del producto
-      const name = tr(product.name).slice(0, 32);
-      doc.fontSize(9).font('Helvetica-Bold').fillColor(L_BLACK)
-         .text(name, x + 8, y + HEAD_H + 8, { width: LEFT_W - 14, lineBreak: true, height: 24, ellipsis: true });
+      const name = tr(product.name).slice(0, 30);
+      doc.fontSize(8.5).font('Helvetica-Bold').fillColor(C_INK)
+         .text(name, x + INNER, lineY + 7, { width: LEFT_W - INNER * 2, lineBreak: true, height: 22, ellipsis: true });
 
-      // Categoría/Marca en dorado
-      const brand = tr(product.brand?.name || product.category?.name || '').toUpperCase();
-      if (brand) {
-        doc.fontSize(6).font('Helvetica').fillColor(L_GOLD)
-           .text(brand, x + 8, y + HEAD_H + 34, { width: LEFT_W - 14 });
+      // Categoría — gris pequeño
+      const cat = tr(product.brand?.name || product.category?.name || '').toUpperCase();
+      if (cat) {
+        doc.fontSize(5.5).font('Helvetica').fillColor(C_MID)
+           .text(cat, x + INNER, lineY + 31, { width: LEFT_W - INNER * 2 });
       }
 
-      // Separador
-      const sep1 = y + HEAD_H + 46;
-      doc.moveTo(x + 8, sep1).lineTo(x + LEFT_W - 8, sep1).lineWidth(0.3).strokeColor('#e5e7eb').stroke();
-
-      // SKU
-      const sku = tr(String(variant?.sku || product.sku || ''));
-      doc.fontSize(6).font('Helvetica').fillColor(L_GRAY)
-         .text('SKU: ' + sku, x + 8, sep1 + 5, { width: LEFT_W - 14 });
-
-      // Variante (talle / color) — grande y destacado
-      const vInfo = [variant?.size, variant?.color].filter(Boolean).map(v => tr(String(v))).join(' / ');
+      // Variante grande (talle / color)
+      const vInfo = [variant?.size, variant?.color].filter(Boolean).map(v => tr(String(v))).join('  /  ');
       if (vInfo) {
-        doc.fontSize(22).font('Helvetica-Bold').fillColor(L_BLACK)
-           .text(vInfo, x + 8, sep1 + 16, { width: LEFT_W - 14, lineBreak: false });
+        doc.fontSize(20).font('Helvetica-Bold').fillColor(C_INK)
+           .text(vInfo, x + INNER, lineY + 42, { width: LEFT_W - INNER * 2, lineBreak: false });
       }
 
-      // Franja dorada con precio en la parte inferior izquierda
-      const priceH = 24;
-      doc.rect(x, y + LH - priceH, LEFT_W, priceH).fill(L_GOLD);
+      // línea separadora antes del precio
+      const priceLineY = y + LH - 22;
+      doc.moveTo(x + INNER, priceLineY).lineTo(x + LEFT_W - INNER, priceLineY)
+         .lineWidth(0.3).strokeColor('#dddddd').stroke();
+
+      // SKU — gris diminuto
+      const sku = tr(String(variant?.sku || product.sku || ''));
+      doc.fontSize(5).font('Helvetica').fillColor(C_MID)
+         .text(sku, x + INNER, priceLineY - 10, { width: LEFT_W - INNER * 2 });
+
+      // Precio — bold, negro, abajo
       const price = Number(variant?.price || product.salePrice || 0);
-      doc.fontSize(11).font('Helvetica-Bold').fillColor('#ffffff')
-         .text('Gs. ' + price.toLocaleString('es-PY'), x + 4, y + LH - priceH + 6, { width: LEFT_W - 8, align: 'center' });
+      doc.fontSize(10).font('Helvetica-Bold').fillColor(C_INK)
+         .text('Gs. ' + price.toLocaleString('es-PY'), x + INNER, priceLineY + 6,
+               { width: LEFT_W - INNER * 2 });
 
-      // ── Columna derecha (código de barras real) ───────────────────────────
-      const RX = x + LEFT_W;
-      const RW = LW - LEFT_W;
-
-      // separador vertical dorado
-      doc.rect(RX, y, 2.5, LH).fill(L_GOLD);
-
-      // Generar barcode real con bwip-js (Code128)
+      // ── LADO DERECHO: código de barras ─────────────────────────────────────
       const barcodeValue = product.barcode || variant?.sku || product.sku || '0000000000';
-      const barPngPad = 8;
-      const barW = RW - barPngPad * 2;
-      const barH = LH - 40;
+      const barPad = 10;
+      const barAvailW = RW - barPad * 2;
+      const barAvailH = LH - barPad * 2;
       try {
         const barPng = await bwipjs.toBuffer({
           bcid:        'code128',
           text:        String(barcodeValue).replace(/[^\x20-\x7E]/g, ''),
           scale:       2,
-          height:      Math.round(barH * 0.35),  // en mm (bwip usa mm)
+          height:      Math.round(barAvailH * 0.28),
           includetext: true,
           textxalign:  'center',
-          textsize:    8,
+          textsize:    7,
           padding:     2,
           backgroundcolor: 'ffffff',
+          barcolor:    '111111',
         });
-        const barImgW = barW;
-        const barImgH = barH * 0.72;
-        doc.image(barPng, RX + barPngPad, y + 14, { width: barImgW, height: barImgH, fit: [barImgW, barImgH] });
+        doc.image(barPng, RX + barPad, y + barPad, {
+          fit: [barAvailW, barAvailH],
+          align: 'center', valign: 'center'
+        });
       } catch {
-        // fallback texto si falla barcode
-        doc.fontSize(6).font('Helvetica').fillColor(L_GRAY)
-           .text(tr(String(barcodeValue)), RX + 4, y + 30, { width: RW - 8, align: 'center' });
+        doc.fontSize(6).font('Helvetica').fillColor(C_MID)
+           .text(tr(String(barcodeValue)), RX + barPad, y + LH / 2 - 5, { width: barAvailW, align: 'center' });
       }
 
       col++;
