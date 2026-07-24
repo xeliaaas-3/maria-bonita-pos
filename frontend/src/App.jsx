@@ -33,6 +33,8 @@ import LayawaysPage from '@/pages/layaways/LayawaysPage';
 import OrdersPage from '@/pages/orders/OrdersPage';
 import SuppliersPage from '@/pages/suppliers/SuppliersPage';
 import LabelsPage from '@/pages/labels/LabelsPage';
+import PurchasesPage from '@/pages/purchases/PurchasesPage';
+import TransfersPage from '@/pages/transfers/TransfersPage';
 
 // Components
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
@@ -99,6 +101,8 @@ function App() {
           <Route path="/orders" element={<OrdersPage />} />
           <Route path="/suppliers" element={<RoleGuard roles={['ADMIN', 'CAJERO']}><SuppliersPage /></RoleGuard>} />
           <Route path="/labels" element={<LabelsPage />} />
+          <Route path="/purchases" element={<RoleGuard roles={['ADMIN', 'CAJERO']}><PurchasesPage /></RoleGuard>} />
+          <Route path="/transfers" element={<RoleGuard roles={['ADMIN', 'CAJERO']}><TransfersPage /></RoleGuard>} />
         </Route>
 
         <Route path="*" element={<NotFoundPage />} />

@@ -455,6 +455,122 @@ exports.getSaleTicketHtml = async (req, res) => {
   }
 };
 
+// PROCESAR DEVOLUCIÓN
+exports.returnSale = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { items, reason } = req.body;
+
+    const sale = await prisma.sale.findUnique({
+      where: { id },
+      include: { items: true }
+    });
+
+    if (!sale) {
+      return res.status(404).json({ success: false, error: 'Venta no encontrada' });
+    }
+
+    if (sale.status === 'CANCELADA') {
+      return res.status(400).json({ success: false, error: 'No se puede devolver una venta cancelada' });
+    }
+
+    // Validar items
+    for (const ri of items) {
+      const saleItem = sale.items.find(si => si.id === ri.saleItemId);
+      if (!saleItem) {
+        return res.status(400).json({ success: false, error: `Ítem no encontrado: ${ri.saleItemId}` });
+      }
+      if (ri.quantity > saleItem.quantity) {
+        return res.status(400).json({ success: false, error: `Cantidad excede lo original para: ${saleItem.name}` });
+      }
+    }
+
+    const returnRecord = await prisma.$transaction(async (tx) => {
+      const returnSaleNumber = await generateSaleNumber(tx, sale.branchId);
+
+      // Calcular total de devolución
+      const returnItems = items.map(ri => {
+        const saleItem = sale.items.find(si => si.id === ri.saleItemId);
+        return {
+          ...saleItem,
+          returnQty: ri.quantity,
+          returnTotal: Number(saleItem.unitPrice) * ri.quantity
+        };
+      });
+
+      const returnTotal = returnItems.reduce((s, i) => s + i.returnTotal, 0);
+
+      // Crear venta devolución
+      const returnSale = await tx.sale.create({
+        data: {
+          number: returnSaleNumber,
+          branchId: sale.branchId,
+          userId: req.user.id,
+          customerId: sale.customerId,
+          cashSessionId: sale.cashSessionId,
+          subtotal: -returnTotal,
+          discount: 0,
+          tax: 0,
+          total: -returnTotal,
+          amountPaid: 0,
+          change: 0,
+          notes: reason || `Devolución de venta #${sale.number}`,
+          status: 'DEVOLUCION',
+          items: {
+            create: returnItems.map(i => ({
+              productId: i.productId,
+              variantId: i.variantId,
+              name: i.name,
+              sku: i.sku,
+              quantity: i.returnQty,
+              unitPrice: i.unitPrice,
+              discount: 0,
+              tax: 0,
+              total: i.returnTotal
+            }))
+          },
+          payments: { create: [] }
+        },
+        include: { items: true }
+      });
+
+      // Restaurar stock
+      for (const ri of returnItems) {
+        await tx.productStock.updateMany({
+          where: {
+            productId: ri.productId,
+            variantId: ri.variantId || null,
+            branchId: sale.branchId
+          },
+          data: { quantity: { increment: ri.returnQty } }
+        });
+
+        await tx.inventoryMovement.create({
+          data: {
+            productId: ri.productId,
+            variantId: ri.variantId,
+            branchId: sale.branchId,
+            type: 'DEVOLUCION',
+            quantity: ri.returnQty,
+            previousQty: 0,
+            currentQty: ri.returnQty,
+            reason: `Devolución venta #${sale.number}`,
+            reference: returnSale.id,
+            userId: req.user.id
+          }
+        });
+      }
+
+      return returnSale;
+    });
+
+    res.status(201).json({ success: true, data: returnRecord });
+  } catch (error) {
+    logger.error('Return sale error:', error);
+    res.status(500).json({ success: false, error: 'Error al procesar la devolución' });
+  }
+};
+
 // ACTUALIZAR VENTA (notas, descuento, cliente)
 exports.updateSale = async (req, res) => {
   try {

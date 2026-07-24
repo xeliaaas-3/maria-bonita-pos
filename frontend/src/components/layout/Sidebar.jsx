@@ -8,7 +8,7 @@ import {
   LayoutDashboard, ShoppingCart, Package, Archive,
   Users, Receipt, Wallet, BarChart3, Settings,
   UserCog, LogOut, Store, ChevronRight, Bell,
-  Zap, Tag, ClipboardList, Truck, Printer
+  Zap, Tag, ClipboardList, Truck, Printer, ShoppingBag, ArrowLeftRight
 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
 import { useThemeStore } from '@/store/theme.store';
@@ -32,6 +32,8 @@ const navItems = [
       { icon: Wallet, label: 'Caja', path: '/cash' },
       { icon: Tag, label: 'Apartados', path: '/layaways' },
       { icon: ClipboardList, label: 'Encargos', path: '/orders' },
+      { icon: ShoppingBag, label: 'Compras', path: '/purchases', roles: ['ADMIN', 'CAJERO'] },
+      { icon: ArrowLeftRight, label: 'Transferencias', path: '/transfers', roles: ['ADMIN', 'CAJERO'] },
     ]
   },
   {

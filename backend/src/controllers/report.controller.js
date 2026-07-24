@@ -212,6 +212,49 @@ async function buildCashReport(dateFilter, branchId) {
   };
 }
 
+// COMISIONES
+exports.getCommissions = async (req, res) => {
+  try {
+    const { startDate, endDate, branchId, rate = 0.05 } = req.query;
+    const branch = branchId || req.user.branchId;
+
+    const where = { status: 'COMPLETADA' };
+    if (branch) where.branchId = branch;
+    if (startDate || endDate) {
+      where.createdAt = {};
+      if (startDate) where.createdAt.gte = new Date(startDate);
+      if (endDate) where.createdAt.lte = new Date(endDate + 'T23:59:59');
+    }
+
+    const grouped = await prisma.sale.groupBy({
+      by: ['userId'],
+      where,
+      _sum: { total: true },
+      _count: true
+    });
+
+    const userIds = grouped.map(g => g.userId).filter(Boolean);
+    const users = await prisma.user.findMany({
+      where: { id: { in: userIds } },
+      select: { id: true, name: true, role: true }
+    });
+    const userMap = Object.fromEntries(users.map(u => [u.id, u]));
+
+    const commissionRate = parseFloat(rate);
+    const data = grouped.map(g => ({
+      user: userMap[g.userId] || { id: g.userId, name: 'Desconocido' },
+      salesCount: g._count,
+      totalSales: Number(g._sum.total || 0),
+      commission: Math.round(Number(g._sum.total || 0) * commissionRate)
+    }));
+
+    res.json({ success: true, data });
+  } catch (error) {
+    console.error('Commissions error:', error);
+    res.status(500).json({ success: false, error: 'Error al obtener comisiones' });
+  }
+};
+
 // EXPORTAR REPORTE PDF
 exports.getReportPDF = async (req, res) => {
   try {

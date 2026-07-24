@@ -21,6 +21,7 @@ import CustomerSearch from '@/components/pos/CustomerSearch';
 import PaymentModal from '@/components/pos/PaymentModal';
 import OpenCashModal from '@/components/pos/OpenCashModal';
 import { queueSale, isNetworkError } from '@/utils/offlineQueue';
+import { BrowserMultiFormatReader } from '@zxing/browser';
 
 export default function POSPage() {
   const { isDark } = useThemeStore();
@@ -36,6 +37,9 @@ export default function POSPage() {
   const [showOpenCash, setShowOpenCash] = useState(false);
   const [lastSale, setLastSale] = useState(null);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [showScanModal, setShowScanModal] = useState(false);
+  const videoRef = useRef(null);
+  const scanReaderRef = useRef(null);
 
   const searchRef = useRef(null);
 
@@ -238,11 +242,35 @@ export default function POSPage() {
               <X className="w-4 h-4" />
             </button>
           )}
-          <div className={clsx('flex items-center gap-1 px-2 py-1 rounded-lg text-xs', isDark ? 'bg-dark-800 text-dark-400' : 'bg-gray-100 text-gray-500')}>
+          <button
+            onClick={() => setShowScanModal(true)}
+            className={clsx('flex items-center gap-1 px-2 py-1 rounded-lg text-xs transition-colors', isDark ? 'bg-dark-800 text-dark-400 hover:bg-dark-700' : 'bg-gray-100 text-gray-500 hover:bg-gray-200')}
+            title="Escanear código de barras con cámara"
+          >
             <Barcode className="w-3 h-3" />
             Escanear
-          </div>
+          </button>
         </div>
+
+        {/* Barcode Scanner Modal */}
+        {showScanModal && (
+          <BarcodeScanModal
+            isDark={isDark}
+            onResult={(code) => {
+              setSearchQuery(code);
+              setShowScanModal(false);
+            }}
+            onClose={() => {
+              if (scanReaderRef.current) {
+                try { scanReaderRef.current.reset(); } catch {}
+                scanReaderRef.current = null;
+              }
+              setShowScanModal(false);
+            }}
+            videoRef={videoRef}
+            scanReaderRef={scanReaderRef}
+          />
+        )}
 
         {/* Product Grid */}
         <div className="flex-1 lg:overflow-y-auto">
@@ -555,6 +583,26 @@ export default function POSPage() {
                 Comprobante PDF (A4)
               </button>
 
+              {/* WhatsApp share */}
+              {(() => {
+                const phone = lastSale.customer?.whatsapp || lastSale.customer?.phone;
+                const waMsg = encodeURIComponent(`Gracias por tu compra! Ticket N° ${lastSale.number} | Total: ${lastSale.total}`);
+                const waUrl = phone
+                  ? `https://wa.me/${phone.replace(/\D/g, '')}?text=${waMsg}`
+                  : `https://wa.me/?text=${waMsg}`;
+                return (lastSale.customer?.whatsapp || lastSale.customer?.phone) ? (
+                  <a
+                    href={waUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full flex items-center justify-center gap-2 py-3 font-medium text-sm rounded-xl bg-green-500 hover:bg-green-600 text-white transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.106.546 4.091 1.502 5.815L0 24l6.335-1.477A11.945 11.945 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 01-5.008-1.371l-.36-.214-3.727.869.884-3.63-.234-.374A9.82 9.82 0 012.182 12C2.182 6.58 6.58 2.182 12 2.182S21.818 6.58 21.818 12 17.42 21.818 12 21.818z"/></svg>
+                    Compartir por WhatsApp
+                  </a>
+                ) : null;
+              })()}
+
               <button
                 onClick={() => setShowSuccess(false)}
                 className={clsx(
@@ -579,6 +627,69 @@ export default function POSPage() {
           isDark={isDark}
         />
       )}
+    </div>
+  );
+}
+
+function BarcodeScanModal({ isDark, onResult, onClose, videoRef, scanReaderRef }) {
+  const [error, setError] = useState(null);
+  const [scanning, setScanning] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    const reader = new BrowserMultiFormatReader();
+    scanReaderRef.current = reader;
+
+    reader.decodeFromVideoDevice(undefined, videoRef.current, (result, err) => {
+      if (!active) return;
+      if (result) {
+        active = false;
+        setScanning(false);
+        onResult(result.getText());
+      }
+    }).catch(e => {
+      if (active) setError('No se pudo acceder a la cámara: ' + e.message);
+    });
+
+    return () => {
+      active = false;
+      try { reader.reset(); } catch {}
+    };
+  }, []);
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" style={{ backdropFilter: 'blur(6px)', background: 'rgba(0,0,0,0.7)' }}>
+      <div className={clsx('w-full max-w-sm rounded-2xl border shadow-2xl overflow-hidden', isDark ? 'bg-dark-900 border-dark-800' : 'bg-white border-gray-100')}>
+        <div className={clsx('flex items-center justify-between px-4 py-3 border-b', isDark ? 'border-dark-800' : 'border-gray-100')}>
+          <h3 className={clsx('font-semibold flex items-center gap-2 text-sm', isDark ? 'text-white' : 'text-dark-900')}>
+            <Barcode className="w-4 h-4 text-primary-500" />
+            Escanear código de barras
+          </h3>
+          <button onClick={onClose} className={clsx('p-1.5 rounded-lg', isDark ? 'hover:bg-dark-800 text-dark-400' : 'hover:bg-gray-100 text-gray-400')}>
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="p-4">
+          {error ? (
+            <div className="text-center py-8">
+              <p className="text-red-500 text-sm">{error}</p>
+              <button onClick={onClose} className="mt-4 px-4 py-2 bg-primary-500 text-white rounded-xl text-sm">Cerrar</button>
+            </div>
+          ) : (
+            <>
+              <div className="relative rounded-xl overflow-hidden bg-black aspect-square">
+                <video ref={videoRef} className="w-full h-full object-cover" />
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="w-48 h-48 border-2 border-primary-500 rounded-xl opacity-70" />
+                </div>
+              </div>
+              <p className={clsx('text-center text-xs mt-3', isDark ? 'text-dark-400' : 'text-gray-500')}>
+                {scanning ? 'Apunte la cámara al código de barras...' : 'Código detectado!'}
+              </p>
+            </>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

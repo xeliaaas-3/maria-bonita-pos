@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft, Printer, Package,
   User, Calendar, Receipt, CheckCircle,
-  XCircle, CreditCard, Loader2, Edit2, Save, X, Percent, Tag
+  XCircle, CreditCard, Loader2, Edit2, Save, X, Percent, Tag, RotateCcw
 } from 'lucide-react';
 import { useState } from 'react';
 import api from '@/services/api';
@@ -37,6 +37,9 @@ export default function SaleDetailPage() {
 
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState({ notes: '', discount: '', discountType: 'MONTO' });
+  const [showReturn, setShowReturn] = useState(false);
+  const [returnItems, setReturnItems] = useState([]);
+  const [returnReason, setReturnReason] = useState('');
 
   const { data: sale, isLoading } = useQuery({
     queryKey: ['sale', id],
@@ -48,6 +51,19 @@ export default function SaleDetailPage() {
         discountType: data.discountType || 'MONTO',
       });
     }
+  });
+
+  const returnMutation = useMutation({
+    mutationFn: (data) => api.post(`/sales/${id}/return`, data),
+    onSuccess: (res) => {
+      toast.success('Devolución procesada exitosamente');
+      queryClient.invalidateQueries(['sale', id]);
+      queryClient.invalidateQueries(['inventory']);
+      setShowReturn(false);
+      setReturnItems([]);
+      setReturnReason('');
+    },
+    onError: (err) => toast.error(err.response?.data?.error || 'Error al procesar devolución')
   });
 
   const updateMutation = useMutation({
@@ -112,6 +128,18 @@ export default function SaleDetailPage() {
   const statusCfg = STATUS_CONFIG[sale.status] || STATUS_CONFIG.COMPLETADA;
   const StatusIcon = statusCfg.icon;
   const canEdit = (hasRole('ADMIN') || hasRole('CAJERO')) && sale.status !== 'CANCELADA';
+  const canReturn = (hasRole('ADMIN') || hasRole('CAJERO')) && sale.status === 'COMPLETADA';
+
+  const openReturn = () => {
+    setReturnItems(sale.items.map(i => ({ saleItemId: i.id, name: i.name, maxQty: i.quantity, quantity: 0 })));
+    setShowReturn(true);
+  };
+
+  const handleReturn = () => {
+    const filtered = returnItems.filter(i => i.quantity > 0);
+    if (filtered.length === 0) return toast.error('Ingrese al menos un ítem a devolver');
+    returnMutation.mutate({ items: filtered.map(i => ({ saleItemId: i.saleItemId, quantity: i.quantity })), reason: returnReason });
+  };
 
   return (
     <div className="p-4 sm:p-6 max-w-3xl mx-auto space-y-6">
@@ -139,6 +167,15 @@ export default function SaleDetailPage() {
             >
               <Edit2 className="w-4 h-4" />
               Editar
+            </button>
+          )}
+          {canReturn && (
+            <button
+              onClick={openReturn}
+              className={clsx('flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium border transition-colors', isDark ? 'border-amber-600/40 text-amber-400 hover:bg-amber-500/10' : 'border-amber-300 text-amber-600 hover:bg-amber-50')}
+            >
+              <RotateCcw className="w-4 h-4" />
+              Devolución
             </button>
           )}
           <button
@@ -402,6 +439,74 @@ export default function SaleDetailPage() {
           ⚠ Documento sin validez fiscal. Uso interno y visual únicamente.
         </p>
       </div>
+
+      {/* Return Modal */}
+      <AnimatePresence>
+        {showReturn && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backdropFilter: 'blur(6px)', background: 'rgba(0,0,0,0.6)' }}>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className={clsx('w-full max-w-lg rounded-2xl border shadow-2xl overflow-hidden', isDark ? 'bg-dark-900 border-dark-800' : 'bg-white border-gray-100')}
+            >
+              <div className={clsx('flex items-center justify-between px-6 py-4 border-b', isDark ? 'border-dark-800' : 'border-gray-100')}>
+                <h2 className={clsx('text-lg font-display font-bold flex items-center gap-2', isDark ? 'text-white' : 'text-dark-900')}>
+                  <RotateCcw className="w-5 h-5 text-amber-500" />
+                  Procesar Devolución
+                </h2>
+                <button onClick={() => setShowReturn(false)} className={clsx('p-1.5 rounded-lg', isDark ? 'hover:bg-dark-800 text-dark-400' : 'hover:bg-gray-100 text-gray-400')}>
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
+                <p className={clsx('text-sm', isDark ? 'text-dark-400' : 'text-gray-500')}>
+                  Ingrese la cantidad a devolver para cada ítem (0 = no devolver).
+                </p>
+                <div className="space-y-2">
+                  {returnItems.map((item, idx) => (
+                    <div key={idx} className={clsx('flex items-center gap-3 px-4 py-3 rounded-xl border', isDark ? 'border-dark-700 bg-dark-800' : 'border-gray-100 bg-gray-50')}>
+                      <span className={clsx('flex-1 text-sm font-medium', isDark ? 'text-white' : 'text-dark-900')}>{item.name}</span>
+                      <span className={clsx('text-xs', isDark ? 'text-dark-400' : 'text-gray-500')}>máx. {item.maxQty}</span>
+                      <input
+                        type="number" min="0" max={item.maxQty}
+                        value={item.quantity}
+                        onChange={e => setReturnItems(prev => prev.map((it, i) => i === idx ? { ...it, quantity: Math.min(Number(e.target.value), item.maxQty) } : it))}
+                        className={clsx('w-16 text-center px-2 py-1 rounded-lg border text-sm outline-none', isDark ? 'bg-dark-900 border-dark-600 text-white' : 'bg-white border-gray-200 text-dark-900')}
+                      />
+                    </div>
+                  ))}
+                </div>
+                <div>
+                  <label className={clsx('block text-xs font-semibold mb-1.5', isDark ? 'text-dark-300' : 'text-dark-700')}>Motivo de devolución</label>
+                  <textarea
+                    value={returnReason}
+                    onChange={e => setReturnReason(e.target.value)}
+                    rows={2}
+                    placeholder="Descripción del motivo..."
+                    className={clsx('w-full px-3 py-2 rounded-xl border text-sm outline-none resize-none', isDark ? 'bg-dark-800 border-dark-700 text-white placeholder:text-dark-500' : 'bg-white border-gray-200 text-dark-900 placeholder:text-gray-400')}
+                  />
+                </div>
+              </div>
+
+              <div className={clsx('flex justify-end gap-3 px-6 py-4 border-t', isDark ? 'border-dark-800' : 'border-gray-100')}>
+                <button onClick={() => setShowReturn(false)} className={clsx('px-5 py-2.5 rounded-xl text-sm font-medium', isDark ? 'text-dark-400 hover:bg-dark-800' : 'text-gray-500 hover:bg-gray-100')}>
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleReturn}
+                  disabled={returnMutation.isPending}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-xl transition-colors disabled:opacity-60"
+                >
+                  {returnMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
+                  Confirmar Devolución
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

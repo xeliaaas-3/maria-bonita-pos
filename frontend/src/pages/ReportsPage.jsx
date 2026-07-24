@@ -7,7 +7,7 @@ import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import {
   BarChart3, Download, Calendar, TrendingUp, Package,
-  Users, Wallet, FileText, FileSpreadsheet, Loader2
+  Users, Wallet, FileText, FileSpreadsheet, Loader2, BadgeDollarSign
 } from 'lucide-react';
 import { Bar, Line } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, PointElement, LineElement, Title, Tooltip, Legend } from 'chart.js';
@@ -25,11 +25,13 @@ const REPORT_TYPES = [
   { id: 'products', label: 'Productos', icon: Package, color: 'text-blue-500' },
   { id: 'customers', label: 'Clientes', icon: Users, color: 'text-violet-500' },
   { id: 'cash', label: 'Caja', icon: Wallet, color: 'text-amber-500' },
+  { id: 'commissions', label: 'Comisiones', icon: BadgeDollarSign, color: 'text-rose-500' },
 ];
 
 export default function ReportsPage() {
   const { isDark } = useThemeStore();
   const [reportType, setReportType] = useState('sales');
+  const [commissionRate, setCommissionRate] = useState(5);
   const [dateRange, setDateRange] = useState({
     start: new Date(new Date().setDate(1)).toISOString().split('T')[0],
     end: new Date().toISOString().split('T')[0]
@@ -42,7 +44,16 @@ export default function ReportsPage() {
     queryFn: () => api.get('/reports', {
       params: { type: reportType, startDate: dateRange.start, endDate: dateRange.end }
     }).then(r => r.data.data),
+    enabled: reportType !== 'commissions',
     keepPreviousData: true
+  });
+
+  const { data: commissionsData, isLoading: commissionsLoading } = useQuery({
+    queryKey: ['reports-commissions', dateRange, commissionRate],
+    queryFn: () => api.get('/reports/commissions', {
+      params: { startDate: dateRange.start, endDate: dateRange.end, rate: commissionRate / 100 }
+    }).then(r => r.data.data),
+    enabled: reportType === 'commissions'
   });
 
   const exportExcel = () => {
@@ -186,7 +197,63 @@ export default function ReportsPage() {
         </div>
       </div>
 
-      {isLoading ? (
+      {/* Commissions Tab */}
+      {reportType === 'commissions' && (
+        <>
+          <div className={clsx('flex items-center gap-4 p-4 rounded-2xl border', cardBase)}>
+            <BadgeDollarSign className="w-4 h-4 text-rose-500 shrink-0" />
+            <label className={clsx('text-sm font-medium', isDark ? 'text-dark-300' : 'text-dark-700')}>Tasa de comisión:</label>
+            <input
+              type="number" min="0" max="100" step="0.5"
+              value={commissionRate}
+              onChange={e => setCommissionRate(Number(e.target.value))}
+              className={clsx('w-20 text-center px-3 py-1.5 rounded-xl border text-sm outline-none', isDark ? 'bg-dark-800 border-dark-700 text-white' : 'bg-gray-50 border-gray-200')}
+            />
+            <span className={clsx('text-sm', isDark ? 'text-dark-400' : 'text-gray-500')}>%</span>
+          </div>
+
+          {commissionsLoading ? (
+            <div className="flex items-center justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-primary-500" /></div>
+          ) : commissionsData && commissionsData.length > 0 ? (
+            <div className={clsx('rounded-2xl border overflow-hidden', cardBase)}>
+              <div className={clsx('p-5 border-b', isDark ? 'border-dark-800' : 'border-gray-100')}>
+                <h3 className={clsx('font-semibold', isDark ? 'text-white' : 'text-dark-900')}>
+                  Comisiones por vendedor — {commissionRate}%
+                </h3>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className={clsx('border-b text-left text-xs font-semibold uppercase tracking-wider', isDark ? 'border-dark-800 text-dark-400' : 'border-gray-100 text-gray-400')}>
+                      <th className="px-5 py-3.5">Vendedor</th>
+                      <th className="px-5 py-3.5 text-right">N° Ventas</th>
+                      <th className="px-5 py-3.5 text-right">Total Vendido</th>
+                      <th className="px-5 py-3.5 text-right">Comisión ({commissionRate}%)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {commissionsData.map((row, i) => (
+                      <tr key={i} className={clsx('border-b last:border-0', isDark ? 'border-dark-800/50 hover:bg-dark-800/30' : 'border-gray-50 hover:bg-gray-50/50')}>
+                        <td className={clsx('px-5 py-3 font-medium', isDark ? 'text-white' : 'text-dark-900')}>{row.user?.name || '-'}</td>
+                        <td className={clsx('px-5 py-3 text-right', isDark ? 'text-dark-300' : 'text-dark-700')}>{row.salesCount}</td>
+                        <td className={clsx('px-5 py-3 text-right font-mono', isDark ? 'text-dark-300' : 'text-dark-700')}>{formatCurrency(row.totalSales)}</td>
+                        <td className="px-5 py-3 text-right font-mono font-bold text-rose-500">{formatCurrency(row.commission)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : (
+            <div className={clsx('flex flex-col items-center justify-center py-16 rounded-2xl border', cardBase)}>
+              <BadgeDollarSign className={clsx('w-10 h-10 mb-3', isDark ? 'text-dark-600' : 'text-gray-300')} />
+              <p className={clsx('text-sm', isDark ? 'text-dark-400' : 'text-gray-500')}>Sin datos para el período seleccionado</p>
+            </div>
+          )}
+        </>
+      )}
+
+      {reportType !== 'commissions' && (isLoading ? (
         <div className="flex items-center justify-center py-20">
           <Loader2 className="w-8 h-8 animate-spin text-primary-500" />
         </div>
@@ -272,7 +339,8 @@ export default function ReportsPage() {
             </div>
           )}
         </>
-      )}
+      ))}
     </div>
   );
 }
+

@@ -26,8 +26,10 @@ router.use('/notifications',  authenticate, require('./notification.routes'));
 router.use('/uploads',        authenticate, require('./upload.routes'));
 router.use('/upload',         authenticate, require('./upload.routes')); // alias sin 's'
 
-router.use('/layaways',  require('./layaway.routes'));
-router.use('/orders',    require('./order.routes'));
-router.use('/suppliers', require('./supplier.routes'));
+router.use('/layaways',   require('./layaway.routes'));
+router.use('/orders',     require('./order.routes'));
+router.use('/suppliers',  require('./supplier.routes'));
+router.use('/purchases',  authenticate, require('./purchase.routes'));
+router.use('/transfers',  authenticate, require('./transfer.routes'));
 
 module.exports = router;
