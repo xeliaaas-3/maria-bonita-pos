@@ -71,16 +71,24 @@ const getFileUrl = (file) => {
   return `${process.env.BASE_URL || process.env.API_URL || 'http://localhost:4000'}/uploads/${file.filename}`;
 };
 
+// ─── Helpers base64 (fallback sin R2) ────────────────────────────────────────
+const fileToBase64 = (file) => {
+  const data = fs.readFileSync(file.path);
+  const b64  = `data:${file.mimetype};base64,${data.toString('base64')}`;
+  try { fs.unlinkSync(file.path); } catch {}
+  return b64;
+};
+
 // ─── Rutas ────────────────────────────────────────────────────────────────────
 router.post('/image', upload.single('image'), (req, res) => {
   if (!req.file) return res.status(400).json({ success: false, error: 'No se subio imagen' });
-  const url = getFileUrl(req.file);
+  const url = useR2 ? getFileUrl(req.file) : fileToBase64(req.file);
   res.json({ success: true, data: { url, filename: req.file.key || req.file.filename } });
 });
 
 router.post('/images', upload.array('images', 10), (req, res) => {
   if (!req.files?.length) return res.status(400).json({ success: false, error: 'No se subieron imagenes' });
-  const urls = req.files.map(f => getFileUrl(f));
+  const urls = req.files.map(f => useR2 ? getFileUrl(f) : fileToBase64(f));
   res.json({ success: true, data: { urls } });
 });
 
